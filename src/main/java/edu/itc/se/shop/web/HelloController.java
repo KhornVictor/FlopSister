@@ -10,7 +10,7 @@ public class HelloController {
 
     @GetMapping("/hello")
     public Greeting hello(@RequestParam(defaultValue = "World") String name) {
-        String message = String.format("Hello, %s! Man in black", name);
+        String message = String.format("Hello, %s!", name);
         return new Greeting(message, Instant.now());
     }
 }
