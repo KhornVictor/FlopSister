@@ -1,0 +1,15 @@
+# Somnang's part: Production profile settings.
+spring:
+  h2:
+    console:
+      enabled: false
+  datasource:
+    url: ${DB_URL:jdbc:h2:mem:shop;DB_CLOSE_DELAY=-1;MODE=PostgreSQL}
+    username: ${DB_USERNAME:sa}
+    password: ${DB_PASSWORD:}
+
+logging:
+  level:
+    root: INFO
+    edu.itc.shop: INFO
+    edu.itc.se.shop: INFO
