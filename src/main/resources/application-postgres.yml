@@ -1,0 +1,12 @@
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/shop}
+    username: ${DB_USERNAME:shop}
+    password: ${DB_PASSWORD:secret}
+    driver-class-name: org.postgresql.Driver
+  h2:
+    console:
+      enabled: false
+  sql:
+    init:
+      mode: always
