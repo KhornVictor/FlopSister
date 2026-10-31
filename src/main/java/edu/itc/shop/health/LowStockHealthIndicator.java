@@ -4,15 +4,16 @@ package edu.itc.shop.health;
 import java.util.List;
 
 import edu.itc.shop.service.ProductService;
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.HealthIndicator;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.health.contributor.Health;
+import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.stereotype.Component;
 
 @Component
 public class LowStockHealthIndicator implements HealthIndicator {
     private final ProductService productService;
 
-    public LowStockHealthIndicator(ProductService productService) {
+    public LowStockHealthIndicator(@Qualifier("shopProductService") ProductService productService) {
         this.productService = productService;
     }
 

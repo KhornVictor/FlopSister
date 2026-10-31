@@ -9,6 +9,7 @@ import edu.itc.shop.service.ProductService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -25,7 +26,7 @@ public class ProductPageController {
     private final ProductService productService;
     private final ShopProperties shopProperties;
 
-    public ProductPageController(ProductService productService, ShopProperties shopProperties) {
+    public ProductPageController(@Qualifier("shopProductService") ProductService productService, ShopProperties shopProperties) {
         this.productService = productService;
         this.shopProperties = shopProperties;
     }
@@ -35,36 +36,38 @@ public class ProductPageController {
         return shopProperties.currency();
     }
 
-    @ModelAttribute("threshold")
-    public int threshold() {
-        return shopProperties.lowStockThreshold();
-    }
-
     @GetMapping("/products")
-    public String listProducts(@RequestParam(name = "q", required = false) String q, Model model) {
+    public String listProducts(@RequestParam(value = "q", required = false) String q, Model model) {
         List<Product> products = productService.findAll(q);
         model.addAttribute("products", products);
-        model.addAttribute("q", q == null ? "" : q);
+        model.addAttribute("query", q == null ? "" : q);
         return "products/list";
     }
 
     @GetMapping("/products/new")
-    public String newProduct(Model model) {
-        model.addAttribute("product", new Product());
+    public String showProductForm(Model model) {
+        if (!model.containsAttribute("product")) {
+            model.addAttribute("product", new Product());
+        }
         return "products/form";
     }
 
     @PostMapping("/products")
-    public String createProduct(@Valid @ModelAttribute("product") Product product,
-                                BindingResult bindingResult,
-                                RedirectAttributes redirectAttributes) {
+    public String saveProduct(
+            @Valid @ModelAttribute("product") Product product,
+            BindingResult bindingResult,
+            RedirectAttributes redirectAttributes) {
+
         if (bindingResult.hasErrors()) {
-            log.warn("Failed validation while creating product: {}", bindingResult.getAllErrors());
             return "products/form";
         }
 
         Product saved = productService.create(product);
-        redirectAttributes.addFlashAttribute("message", "Product created: " + saved.getName());
+        redirectAttributes.addFlashAttribute(
+                "flashMessage",
+                "Product '" + saved.getName() + "' created successfully (gross " + saved.getGross() + ")."
+        );
+
         return "redirect:/products";
     }
 }

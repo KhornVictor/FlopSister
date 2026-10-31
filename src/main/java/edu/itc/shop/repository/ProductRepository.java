@@ -13,7 +13,7 @@ import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
-@Repository
+@Repository("productNamedParameterJdbcRepository")
 public class ProductRepository {
     private final NamedParameterJdbcTemplate jdbcTemplate;
 

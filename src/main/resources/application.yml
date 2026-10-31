@@ -1,4 +1,4 @@
-# Somnang's part: Base Spring Boot application settings.
+# Base Spring Boot application settings
 spring:
   application:
     name: "@project.name@"
@@ -7,10 +7,14 @@ spring:
       prefix: /WEB-INF/jsp/
       suffix: .jsp
   datasource:
-    url: jdbc:h2:mem:shop;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
-    username: sa
-    password:
-    driver-class-name: org.h2.Driver
+    url: ${DB_URL:jdbc:h2:mem:shop;DB_CLOSE_DELAY=-1;MODE=PostgreSQL}
+    username: ${DB_USERNAME:sa}
+    password: ${DB_PASSWORD:}
+    driver-class-name: ${DB_DRIVER:org.h2.Driver}
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
   sql:
     init:
       mode: always
@@ -40,5 +44,7 @@ logging:
     edu.itc.shop: DEBUG
     edu.itc.se.shop: DEBUG
     edu.itc.shop.service.TimingAspect: DEBUG
+    org.springframework.jdbc: DEBUG
+    org.springframework.transaction: DEBUG
   pattern:
     console: "%d{HH:mm:ss.SSS} %-5level [%X{requestId:-no-request}] %logger{36} : %msg%n"

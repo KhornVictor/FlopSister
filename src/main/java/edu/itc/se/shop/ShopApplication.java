@@ -28,7 +28,7 @@ public class ShopApplication {
 
 	@Bean
 	CommandLineRunner demonstrateBeans(ApplicationContext context,
-			WelcomeService welcomeService,
+			ObjectProvider<WelcomeService> welcomeServiceProvider,
 			ObjectProvider<ReportBuilder> reportBuilders) {
 		return args -> {
 			String[] notifierBeans = Arrays.stream(context.getBeanDefinitionNames())
@@ -38,15 +38,19 @@ public class ShopApplication {
 			log.info("{} beans; notifiers = {}", context.getBeanDefinitionCount(),
 					Arrays.toString(notifierBeans));
 
-			welcomeService.welcome("ann", false);
-			welcomeService.welcome("bob", true);
+			welcomeServiceProvider.ifAvailable(ws -> {
+				ws.welcome("ann", false);
+				ws.welcome("bob", true);
+			});
 
-			ReportBuilder first = reportBuilders.getObject();
-			ReportBuilder second = reportBuilders.getObject();
-			log.info("prototype instances differ: {} ({} != {})",
-					first != second,
-					System.identityHashCode(first),
-					System.identityHashCode(second));
+			ReportBuilder first = reportBuilders.getIfAvailable();
+			ReportBuilder second = reportBuilders.getIfAvailable();
+			if (first != null && second != null) {
+				log.info("prototype instances differ: {} ({} != {})",
+						first != second,
+						System.identityHashCode(first),
+						System.identityHashCode(second));
+			}
 		};
 	}
 

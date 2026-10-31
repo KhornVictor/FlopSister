@@ -9,16 +9,17 @@ import edu.itc.shop.model.Product;
 import edu.itc.shop.repository.ProductRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
-@Service
+@Service("shopProductService")
 public class ProductService {
     private static final Logger log = LoggerFactory.getLogger(ProductService.class);
 
     private final ProductRepository productRepository;
     private final ShopProperties shopProperties;
 
-    public ProductService(ProductRepository productRepository, ShopProperties shopProperties) {
+    public ProductService(@Qualifier("productNamedParameterJdbcRepository") ProductRepository productRepository, ShopProperties shopProperties) {
         this.productRepository = productRepository;
         this.shopProperties = shopProperties;
     }
