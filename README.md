@@ -44,3 +44,53 @@ org.springframework.dao.DuplicateKeyException
 2. **Spring JDBC Layer**: `JdbcClient` delegates execution to `JdbcTemplate.execute(...)`. Inside `JdbcTemplate`, the `catch (SQLException ex)` block intercepts the checked `SQLException`.
 3. **`SQLExceptionTranslator`**: `JdbcTemplate` invokes its configured `SQLExceptionTranslator`, specifically `SQLErrorCodeSQLExceptionTranslator`.
 4. **Error Code Mapping**: The translator references error codes defined for H2 (from Spring's `sql-error-codes.xml`). It recognizes error code `23505` as a unique index or primary key duplicate error and wraps the root cause in Spring's uniform, unchecked `org.springframework.dao.DuplicateKeyException`.
+
+---
+
+## task 5: JSP views, profiles, actuator, logging, and an aspect
+
+### Team split for the assignment
+- Team A: product table UI, product form, redirect flow, CSS, JSP pages, and schema/data setup.
+- Team B: environment-specific YAML, configuration properties, health indicator, request-id logging filter, and AOP timing logs.
+
+### Startup checks for the two profiles
+
+#### Dev profile (`SPRING_PROFILES_ACTIVE=dev`)
+```text
+16:17:41.571 INFO  [no-request] edu.itc.se.shop.ShopApplication : The following 1 profile is active: "dev"
+16:17:43.667 INFO  [no-request] o.s.b.a.h.H2ConsoleAutoConfiguration : H2 console available at '/h2-console'. Database available at 'jdbc:h2:mem:shop'
+```
+
+#### Prod profile (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD` set in the environment)
+```text
+16:18:52.153 INFO  [no-request] edu.itc.se.shop.ShopApplication : The following 1 profile is active: "prod"
+```
+
+Note: in the `prod` run, there is no H2 console banner because the H2 console is disabled in `application-prod.yml`.
+
+### Actuator and logging proof
+
+```bash
+curl http://localhost:8080/actuator/health
+```
+Output:
+```json
+{"status":"DOWN","components":{"db":{"status":"UP","details":{"database":"H2","validationQuery":"isValid()"}},"lowStock":{"status":"DOWN","details":{"lowStockProducts":["Keyboard"]}}}}
+```
+
+Runtime logger update:
+```powershell
+$body = @{ configuredLevel = 'OFF' } | ConvertTo-Json
+Invoke-RestMethod -Uri 'http://localhost:8080/actuator/loggers/edu.itc.shop.service.TimingAspect' -Method Post -ContentType 'application/json' -Body $body
+```
+Then the `TimingAspect` logger is shown as `configuredLevel = "OFF"` and `effectiveLevel = "OFF"`, proving the level can be changed without restarting the app.
+
+### Example production log lines from the server
+```text
+16:18:06.399 DEBUG [d3f3e1b9] o.s.jdbc.core.JdbcTemplate : Executing prepared SQL query
+16:18:06.399 DEBUG [d3f3e1b9] edu.itc.shop.service.TimingAspect : ProductService.findAll(..) took 16160 µs
+16:18:15.515 INFO  [144d5a0f] edu.itc.shop.service.ProductService : created product 4 'USB-C adapter'
+16:18:15.515 DEBUG [144d5a0f] edu.itc.shop.service.TimingAspect : ProductService.create(..) took 9135 µs
+```
+
+All of the above were validated with the app running behind a Spring Boot embedded Tomcat war deployment, using the `dev` and `prod` profiles and the Actuator endpoints for health and logger management.
