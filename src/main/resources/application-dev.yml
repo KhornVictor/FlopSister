@@ -1,13 +1,9 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:shop;DB_CLOSE_DELAY=-1
-    username: victor
+    url: "jdbc:postgresql://localhost:5432"
+    driver-class-name: "org.postgresql.Driver"
+    username: "victor"
     password: "thisismypassword"
-
-  h2:
-    console:
-      settings:
-        web-allow-others: true
 
 logging:
   level:
