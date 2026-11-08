@@ -25,7 +25,51 @@ This module implements the core domain model, baseline Flyway migration, and JPA
 ---
 
 ## 3. Deliberate Schema Mismatches & Design Rationales
+### Missing Column Validation Test
 
+To verify Hibernate schema validation, a deliberate mismatch was introduced in the test database (`shop_mismatch`).
+
+**Test procedure:**
+1. Applied the Flyway migration successfully.
+2. Removed the `name` column from the `product` table using `ALTER TABLE product DROP COLUMN name`.
+3. Started the Spring Boot application with `ddl-auto: validate`.
+
+**Expected result:** Hibernate should detect that the database schema does not match the Product entity mapping and prevent the application from starting.
+
+**Actual result:** The application failed to initialize because Hibernate detected the missing column.
+
+Error message:
+
+Schema validation: missing column [name] in table [product]
+
+**Conclusion:** Hibernate's `validate` mode correctly detects missing database columns without automatically modifying the schema.
+
+### Sequence Increment Mismatch Test
+
+A deliberate sequence mismatch was introduced in the test database (`shop_mismatch`) to verify Hibernate's sequence validation.
+
+**Test procedure:**
+1. Applied the Flyway migration with the original sequence increment of 50.
+2. Changed the `product_seq` increment from 50 to 1 using:
+
+
+ALTER SEQUENCE product_seq INCREMENT BY 1;
+
+
+3. Started the Spring Boot application with `ddl-auto: validate`.
+
+**Expected result:** Hibernate should detect that the database sequence increment does not match the entity mapping.
+
+**Actual result:** The application failed to initialize because Hibernate detected the mismatch.
+
+Error message:
+
+The increment size of the [product_seq] sequence is set to [50]
+in the entity mapping but the mapped database sequence
+increment size is [1]
+
+
+**Conclusion:** Hibernate correctly validates sequence increment sizes and prevents application startup when the database configuration does not match the entity mapping.
 ### A. Identifier Generation: `SEQUENCE` vs `IDENTITY`
 - **Choice**: `GenerationType.SEQUENCE` with `allocationSize = 50`.
 - **Rationale**: `IDENTITY` forces an immediate JDBC roundtrip `INSERT` to retrieve the database-generated ID, which breaks JDBC statement batching (`hibernate.jdbc.batch_size`). Using sequences pre-allocates blocks of 50 IDs in memory, enabling Hibernate to batch inserts efficiently.
@@ -49,3 +93,4 @@ This module implements the core domain model, baseline Flyway migration, and JPA
 ### F. Flyway Managed Schema Validation
 - **Choice**: `spring.jpa.hibernate.ddl-auto: validate`.
 - **Rationale**: Schema generation (`create-drop` or `update`) is strictly prohibited in production. Flyway maintains immutable versioned migrations (`V1__init.sql`), while Hibernate merely validates that Java entities conform to the existing database schema.
+

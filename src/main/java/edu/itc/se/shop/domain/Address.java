@@ -4,13 +4,8 @@ import jakarta.persistence.Embeddable;
 
 @Embeddable
 public record Address(
-    String street,
-    String city,
-    String state,
-    String zipCode,
-    String country
+        String street,
+        String city,
+        String zip
 ) {
-    public Address() {
-        this(null, null, null, null, null);
-    }
 }
