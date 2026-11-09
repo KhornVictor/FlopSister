@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -22,19 +23,24 @@ import jakarta.persistence.Version;
 @Entity
 @Table(name = "orders")
 public class Order {
+
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "orders_seq")
     @SequenceGenerator(name = "orders_seq", sequenceName = "orders_seq", allocationSize = 50)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "order_seq_gen")
+    @SequenceGenerator(name = "order_seq_gen", sequenceName = "orders_seq", allocationSize = 50)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "customer_id", nullable = false)
     private Customer customer;
 
-    private Instant placedAt;
-
     @Enumerated(EnumType.STRING)
-    private OrderStatus status;
+    @Column(nullable = false, length = 20)
+    private OrderStatus status = OrderStatus.NEW;
+
+    @Column(name = "placed_at", nullable = false)
+    private Instant placedAt = Instant.now();
 
     @Version
     private long version;
@@ -45,10 +51,60 @@ public class Order {
     protected Order() {
     }
 
+    public Order(Customer customer) {
+        this.customer = customer;
+        this.status = OrderStatus.NEW;
+    }
+
+    public Order(Customer customer, OrderStatus status) {
+        this.customer = customer;
+        this.status = status;
+        this.placedAt = Instant.now();
+    }
+
     public Order(Customer customer, Instant placedAt, OrderStatus status) {
         this.customer = customer;
         this.placedAt = placedAt;
         this.status = status;
+    }
+
+    public OrderLine addLine(Product product, int quantity) {
+        if (product == null) {
+            throw new IllegalArgumentException("Product cannot be null");
+        }
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Quantity must be positive");
+        }
+
+        OrderLine line = new OrderLine(this, product, quantity, product.getPrice());
+        lines.add(line);
+        return line;
+    }
+
+    public void removeLine(OrderLine line) {
+        if (line != null && lines.remove(line)) {
+            line.setOrder(null);
+        }
+    }
+
+    public Money total() {
+        if (lines.isEmpty()) {
+            return Money.eur("0.00");
+        }
+
+        Money total = lines.get(0).getUnitPrice().times(lines.get(0).getQuantity());
+        for (int i = 1; i < lines.size(); i++) {
+            OrderLine line = lines.get(i);
+            Money lineTotal = line.getUnitPrice().times(line.getQuantity());
+
+            if (!total.currency().equals(lineTotal.currency())) {
+                throw new IllegalStateException("Cannot total different currencies");
+            }
+
+            total = new Money(total.amount().add(lineTotal.amount()), total.currency());
+        }
+
+        return total;
     }
 
     public Long getId() {
@@ -59,8 +115,8 @@ public class Order {
         return customer;
     }
 
-    public Instant getPlacedAt() {
-        return placedAt;
+    public void setCustomer(Customer customer) {
+        this.customer = customer;
     }
 
     public OrderStatus getStatus() {
@@ -69,6 +125,14 @@ public class Order {
 
     public void setStatus(OrderStatus status) {
         this.status = status;
+    }
+
+    public Instant getPlacedAt() {
+        return placedAt;
+    }
+
+    public void setPlacedAt(Instant placedAt) {
+        this.placedAt = placedAt;
     }
 
     public long getVersion() {
@@ -82,5 +146,30 @@ public class Order {
     public void addLine(Product product, int quantity) {
         OrderLine line = new OrderLine(this, product, quantity);
         this.lines.add(line);
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Order order = (Order) o;
+        return id != null && id.equals(order.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "Order{" +
+                "id=" + id +
+                ", status=" + status +
+                ", placedAt=" + placedAt +
+                ", version=" + version +
+                '}';
+    }
+
+    public void setLines(List<OrderLine> lines) {
+        this.lines = lines;
     }
 }

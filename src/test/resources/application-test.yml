@@ -19,6 +19,8 @@ spring:
         order_inserts: true
         order_updates: true
 
+  flyway:
+    enabled: false
 logging:
   level:
     org.hibernate.SQL: DEBUG

@@ -11,13 +11,24 @@ import edu.itc.se.shop.domain.OrderStatus;
 import edu.itc.se.shop.repository.OrderRepository;
 import edu.itc.se.shop.web.dto.OrderDetailsDto;
 import edu.itc.se.shop.web.dto.OrderDto;
+import edu.itc.se.shop.web.dto.OrderResponse;
 
 @Service
+@Transactional
 public class OrderService {
-    private final OrderRepository orders;
 
-    public OrderService(OrderRepository orders) {
-        this.orders = orders;
+    private final OrderRepository orderRepository;
+
+    public OrderService(OrderRepository orderRepository) {
+        this.orderRepository = orderRepository;
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrderResponse> getOrdersWithLinesByCustomerEmail(String email) {
+        List<Order> orders = orderRepository.findWithLinesByCustomerEmail(email);
+        return orders.stream()
+                .map(OrderResponse::from)
+                .toList();
     }
 
     @Transactional
@@ -63,7 +74,7 @@ public class OrderService {
     }
 
     private Order findOrder(Long id) {
-        return orders.findById(id).orElseThrow(
+        return orderRepository.findById(id).orElseThrow(
                 () -> new IllegalArgumentException("Order not found: " + id));
     }
 }
