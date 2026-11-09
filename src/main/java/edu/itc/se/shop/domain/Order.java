@@ -1,6 +1,10 @@
 package edu.itc.se.shop.domain;
 
 import java.time.Instant;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,6 +27,18 @@ import jakarta.persistence.Version;
 @Entity
 @Table(name = "orders")
 public class Order {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "customer_id", nullable = false)
+    private Customer customer;
+
+    private Instant placedAt;
+
+    @Enumerated(EnumType.STRING)
+    private OrderStatus status;
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "order_seq_gen")
@@ -43,6 +59,13 @@ public class Order {
     @Version
     private long version;
 
+    protected Order() {
+    }
+
+    public Order(Customer customer, Instant placedAt, OrderStatus status) {
+        this.customer = customer;
+        this.placedAt = placedAt;
+        this.status = status;
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderLine> lines = new ArrayList<>();
 
@@ -107,6 +130,8 @@ public class Order {
         return customer;
     }
 
+    public Instant getPlacedAt() {
+        return placedAt;
     public void setCustomer(Customer customer) {
         this.customer = customer;
     }
@@ -119,6 +144,9 @@ public class Order {
         this.status = status;
     }
 
+    public long getVersion() {
+        return version;
+    }
     public Instant getPlacedAt() {
         return placedAt;
     }

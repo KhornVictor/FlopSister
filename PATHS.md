@@ -103,25 +103,30 @@ shop-jpa/
 
 ## Task 4: HENG MEYLORNG - Entity States, Dirty Checking, Transactions, and Optimistic Locking
 
-Service layer transactional logic, concurrency retry facade, and state lifecycle tests:
+Implemented in the current `FlopSister` workspace, using its existing `edu.itc.se.shop` package:
 
 ```text
-shop-jpa/
-├── README.md                               # Notes: merge, read-only trap, retry logs
+FlopSister/
+├── README.md                               # Dirty checking, merge, read-only trap, flush order, logs
+├── pom.xml                                 # Adds Spring Data JPA
 └── src/
-    ├── main/java/edu/itc/shop/
-    │   ├── service/
-    │   │   ├── OrderFacade.java            # changeStatusWithRetry loop
-    │   │   └── OrderService.java           # markPaid, changeStatus, view
-    │   └── web/dto/
-    │       └── OrderDto.java
-    └── test/java/edu/itc/shop/
-        ├── service/
-        │   ├── FlushOrderTest.java
-        │   ├── OptimisticLockingTest.java
-        │   └── OrderServiceTest.java
-        └── support/
-            └── TestData.java               # Fixture generator helper
+    ├── main/
+    │   ├── java/edu/itc/se/shop/
+    │   │   ├── domain/                     # Customer, Order, OrderStatus, Product, Tag
+    │   │   ├── repository/                 # JPA repositories
+    │   │   ├── service/
+    │   │   │   ├── OrderFacade.java        # changeStatusWithRetry loop
+    │   │   │   └── OrderService.java       # markPaid, changeStatus, view
+    │   │   └── web/dto/OrderDto.java
+    │   └── resources/application.yml        # Schema update for the local H2 app
+    └── test/
+        ├── java/edu/itc/se/shop/
+        │   ├── service/
+        │   │   ├── FlushOrderTest.java
+        │   │   ├── OptimisticLockingTest.java
+        │   │   └── OrderServiceTest.java
+        │   └── support/TestData.java
+        └── resources/application-test.yml  # Test schema and required logging levels
 ```
 
 ## Task 5: BE MENGSEANG - N+1, Performance Tuning, and a Second Migration
