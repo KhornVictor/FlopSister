@@ -2,7 +2,6 @@ package edu.itc.se.shop.domain;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import jakarta.persistence.CascadeType;
@@ -124,12 +123,16 @@ public class Order {
         return placedAt;
     }
 
+    public void setPlacedAt(Instant placedAt) {
+        this.placedAt = placedAt;
+    }
+
     public long getVersion() {
         return version;
     }
 
     public List<OrderLine> getLines() {
-        return Collections.unmodifiableList(lines);
+        return lines;
     }
 
     @Override
