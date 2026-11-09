@@ -27,7 +27,7 @@ public class Order {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "order_seq_gen")
-    @SequenceGenerator(name = "order_seq_gen", sequenceName = "order_seq", allocationSize = 50)
+    @SequenceGenerator(name = "order_seq_gen", sequenceName = "orders_seq", allocationSize = 50)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -153,5 +153,9 @@ public class Order {
                 ", placedAt=" + placedAt +
                 ", version=" + version +
                 '}';
+    }
+
+    public void setLines(List<OrderLine> lines) {
+        this.lines = lines;
     }
 }

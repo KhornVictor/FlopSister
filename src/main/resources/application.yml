@@ -16,7 +16,6 @@ spring:
       hibernate:
         # Task 0 & 5: Statistics & Statement Counting
         generate_statistics: true
-        # Task 5: Batching & Fetch optimizations
         jdbc:
           batch_size: 50
         order_inserts: true
@@ -26,6 +25,7 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+    baseline-on-migrate: true
 
 logging:
   level:
