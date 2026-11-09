@@ -74,4 +74,8 @@ public class Tag {
                 ", name='" + name + '\'' +
                 '}';
     }
+
+    public void setProducts(Set<Product> products) {
+        this.products = products;
+    }
 }

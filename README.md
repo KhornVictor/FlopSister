@@ -215,3 +215,143 @@ spring:
 This ensures that Hibernate validates the existing schema rather than automatically modifying it.
 
 Both migrations were successfully tested against a fresh test database, and Hibernate schema validation passed.
+
+---
+
+## 9. Task 3 — Repositories, Queries, Projections and Paginated Endpoints
+
+### A. Repositories and Derived Queries
+
+Data access was replaced with Spring Data JPA repositories:
+- `CustomerRepository extends JpaRepository<Customer, Long>`
+- `ProductRepository extends JpaRepository<Product, Long>, JpaSpecificationExecutor<Product>`
+  - Derived queries:
+    - `existsBySku(String sku)`
+    - `findTop3ByCategoryOrderByPriceAmountDesc(Category category)` (navigates the embedded `price.amount`)
+    - `findByTagsName(String name)` (navigates through `@ManyToMany` association `tags.name`)
+  - Native query:
+    - `findLowStock(int min)` (`SELECT p.* FROM product p WHERE p.stock < :min ORDER BY p.stock`, `nativeQuery = true`)
+  - Record projection:
+    - `Page<ProductView> findByCategory(Category category, Pageable pageable)`
+- `OrderRepository extends JpaRepository<Order, Long>`
+  - Derived queries:
+    - `findByCustomerEmailAndStatusOrderByPlacedAtDesc(String email, OrderStatus status)`
+    - `countByStatus(OrderStatus status)`
+    - `findFirstByCustomerIdOrderByPlacedAtDesc(Long customerId)`
+  - Interface projection:
+    - `Page<OrderSummary> findByStatus(OrderStatus status, Pageable pageable)`
+  - JPQL queries:
+    - `findWithLinesByCustomerEmail(String email)` using fetch joins:
+      ```java
+      @Query("""
+          select distinct o from Order o
+            join fetch o.lines l
+            join fetch l.product
+           where o.customer.email = :email
+           order by o.placedAt desc
+          """)
+      List<Order> findWithLinesByCustomerEmail(@Param("email") String email);
+      ```
+    - `countLinesByStatus(OrderStatus status)` with aggregate:
+      ```java
+      @Query("select count(l) from OrderLine l where l.order.status = :status")
+      long countLinesByStatus(@Param("status") OrderStatus status);
+      ```
+
+### B. Boot-Time Method Typo Experiment
+
+Spring Data JPA parses repository query method names at application startup during Spring context bootstrapping.
+
+When an intentional typo was introduced into `OrderRepository`:
+```java
+List<Order> findByCustomerEmaliAndStatusOrderByPlacedAtDesc(String email, OrderStatus status);
+```
+
+The application failed to start with the following boot error:
+
+```text
+org.springframework.beans.factory.UnsatisfiedDependencyException: Error creating bean with name 'orderService' defined in file [C:\Desktop\Student Online (SO)\Techno\I4-GIC-A\I4-GIC-S1\Software engineering\C3-Hibernate Framework and Spring Data JPA\FlopSister\target\classes\edu\itc\se\shop\service\OrderService.class]: Unsatisfied dependency expressed through constructor parameter 0: Error creating bean with name 'orderRepository' defined in edu.itc.se.shop.repository.OrderRepository defined in @EnableJpaRepositories declared on ShopApplication: No property 'emali' found for type 'Customer'; Did you mean 'email'; Traversed path: Order.customer
+	at org.springframework.beans.factory.support.ConstructorResolver.createArgumentArray(ConstructorResolver.java:804)
+	at org.springframework.beans.factory.support.ConstructorResolver.autowireConstructor(ConstructorResolver.java:240)
+	...
+Caused by: org.springframework.data.mapping.PropertyReferenceException: No property 'emali' found for type 'Customer'; Did you mean 'email'; Traversed path: Order.customer
+	at org.springframework.data.mapping.PropertyPath.<init>(PropertyPath.java:90)
+	at org.springframework.data.mapping.PropertyPath.create(PropertyPath.java:437)
+	at org.springframework.data.mapping.PropertyPath.create(PropertyPath.java:413)
+```
+
+This confirms fail-fast validation: Spring Data JPA validates all query method signatures against the underlying entity metamodel at startup before any HTTP requests are accepted. The typo was corrected back to `findByCustomerEmailAndStatusOrderByPlacedAtDesc`.
+
+### C. Projections (Interface and Record)
+
+1. **Interface Projection (`OrderSummary`)**:
+   ```java
+   public interface OrderSummary {
+       Long getId();
+       OrderStatus getStatus();
+       Instant getPlacedAt();
+       CustomerName getCustomer();
+       interface CustomerName {
+           String getName();
+       }
+   }
+   ```
+   When queried via `OrderRepository.findByStatus(status, pageable)`, Hibernate generates a selective projection SQL query selecting only the required fields:
+   ```sql
+   DEBUG org.hibernate.SQL : select o1_0.id,o1_0.status,o1_0.placed_at,c1_0.id,c1_0.street,c1_0.city,c1_0.zip,c1_0.email,c1_0.name,c1_0.ship_street,c1_0.ship_city,c1_0.ship_zip from orders o1_0 join customer c1_0 on c1_0.id=o1_0.customer_id where o1_0.status=? order by o1_0.placed_at desc fetch first ? rows only
+   DEBUG org.hibernate.SQL : select count(o1_0.id) from orders o1_0 where o1_0.status=?
+   ```
+
+2. **Record Projection (`ProductView`)**:
+   ```java
+   public record ProductView(Long id, String sku, String name, BigDecimal amount, int stock) {}
+   ```
+   Returned by `ProductRepository.findByCategory(Category, Pageable)` and mapped in `ProductService.searchProducts`.
+
+### D. Specifications and Dynamic Filtering
+
+`ProductSpecs` provides composable JPA specifications:
+- `nameContains(String q)`
+- `inCategory(Category category)`
+- `cheaperThan(BigDecimal max)`
+- `inStock()`
+- `filter(String q, Category category, BigDecimal maxPrice, Boolean inStock)`: Combines non-null filters via `Specification.allOf`.
+
+### E. Data Seeder
+
+`DataSeeder` (`@Component @Profile("dev") ApplicationRunner`) inserts:
+- 3 Customers (`Ada Lovelace`, `Grace Hopper`, `Margaret Hamilton`)
+- 5 Tags
+- 12 Products across various categories (including `KB-1`, `KB-7`, `KB-EXP`, etc.)
+- 30 Orders with 2–4 lines each and mixed statuses (11 PAID, 8 SHIPPED, 7 NEW, 4 CANCELLED)
+
+Executed within a single `@Transactional` method when running with `--spring.profiles.active=dev`.
+
+### F. REST Endpoints
+
+1. `GET /api/orders?status=PAID&page=0&size=5&sort=placedAt,desc`
+   - Returns paginated `Page<OrderSummary>` using `@PageableDefault(size = 20, sort = "placedAt", direction = Sort.Direction.DESC)`.
+2. `GET /api/products?q=&category=&maxPrice=&inStock=&page=&size=`
+   - Returns paginated `Page<ProductView>` dynamically filtered with `ProductSpecs.filter`.
+3. `GET /api/customers/{email}/orders`
+   - Returns full order DTOs (`OrderResponse` with order lines) using `findWithLinesByCustomerEmail` inside a `@Transactional(readOnly = true)` service method.
+   - Prevents exposing JPA entities directly through web controllers.
+
+Full transcript details are saved in `api-session.md`.
+
+### G. Test Suite
+
+`OrderRepositoryTest` (`@DataJpaTest`) covers:
+1. Derived query `findByCustomerEmailAndStatusOrderByPlacedAtDesc`
+2. Fetch join `findWithLinesByCustomerEmail`, asserting:
+   - `Hibernate.isInitialized(order.getLines())` is `true` after the fetch join query.
+   - `Hibernate.isInitialized(order.getLines())` is `false` after a plain `findById` + `clear`.
+3. Native query `findLowStock(int min)`
+4. Interface projection `findByStatus(status, pageable)` returning `OrderSummary`
+5. Aggregate query `countLinesByStatus(status)`
+
+```text
+[INFO] Running edu.itc.se.shop.repository.OrderRepositoryTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+```

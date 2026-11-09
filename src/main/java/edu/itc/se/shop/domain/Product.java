@@ -1,5 +1,6 @@
 package edu.itc.se.shop.domain;
 
+import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -95,6 +96,10 @@ public class Product {
         return price;
     }
 
+    public BigDecimal getAmount() {
+        return price != null ? price.amount() : null;
+    }
+
     public Category getCategory() {
         return category;
     }
@@ -145,5 +150,9 @@ public class Product {
                 ", category=" + category +
                 ", stock=" + stock +
                 '}';
+    }
+
+    public void setTags(Set<Tag> tags) {
+        this.tags = tags;
     }
 }
