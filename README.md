@@ -1,5 +1,21 @@
 # Lab-03: Hibernate Framework and Spring Data JPA
 
+## Contributors & Project Information
+
+- **Institution:** Institute of Technology of Cambodia (ITC)
+- **Department:** Information and Communication Engineering (GIC)
+- **Class / Academic Year:** I4-GIC-A · Semester 1
+- **Course:** Software Engineering — C3: Hibernate Framework and Spring Data JPA
+- **Project Repository:** `FlopSister` (`shop-jpa`)
+- **Group Members & Contributors:**
+  - **KHORN Victor**
+  - **BE Mengseang**
+  - **KIM Boramey**
+  - **MEY Lorngheng**
+  - **HOUR Samnang**
+
+---
+
 ## Technical Stack & Configuration
 
 - **Framework:** Spring Boot 4.1.x, Spring Data JPA
@@ -239,7 +255,42 @@ Implemented and benchmarked three bulk import approaches in `BulkImportService` 
 
 ---
 
-## 5. Verification & Test Execution
+## 5. HTTP API Session Transcript (`api-session.md`)
+
+The complete raw HTTP request/response payloads, pagination metadata, and generated SQL statement logs are documented in [`api-session.md`](api-session.md). Below is the summary of the verified endpoints:
+
+### Endpoint 1: Paginated Orders with `OrderSummary` Projection
+- **Request:** `GET /api/orders?status=PAID&page=0&size=2&sort=placedAt,desc`
+- **Behavior:** Retrieves a `Page<OrderSummary>`. Interface projection prevents loading unneeded columns and uninitialized associations.
+- **Generated SQL:**
+  ```sql
+  select o1_0.id, o1_0.status, o1_0.placed_at, c1_0.id, c1_0.name, c1_0.email
+  from orders o1_0 join customer c1_0 on c1_0.id=o1_0.customer_id
+  where o1_0.status=? order by o1_0.placed_at desc fetch first ? rows only;
+  select count(o1_0.id) from orders o1_0 where o1_0.status=?;
+  ```
+
+### Endpoint 2: Filtered Products with `ProductSpecs` & `ProductView`
+- **Request:** `GET /api/products?q=key&category=HARDWARE&maxPrice=60&inStock=true`
+- **Behavior:** Dynamic JPA Criteria Specification (`ProductSpecs.filter`) querying products by substring, category, price threshold, and stock availability. Projected through `ProductView` (`sku`, `name`, `amount`, `stock`).
+- **Sample Result:** Returns filtered matching items (e.g. `KB-1` Mechanical Keyboard, `KB-7` Wireless Numeric Keypad).
+
+### Endpoint 3: Customer Orders with Joined Eager Lines
+- **Request:** `GET /api/customers/{email}/orders`
+- **Behavior:** Retrieves complete customer order history including all lines and products using `join fetch o.lines l join fetch l.product` to guarantee zero N+1 queries.
+- **SQL:** Single query fetching orders, order lines, and product details together in one database round-trip.
+
+### Endpoint 4: Dynamic Criteria Report (Challenge Part 1)
+- **Request:** `GET /api/reports/products?category=HARDWARE&minStock=1&tag=sale&sort=amount,desc`
+- **Behavior:** Type-safe CriteriaBuilder query using metamodel `Product_`, `Tag_`, `Money_`, computing `tagCount` via subquery and returning `List<ProductReportRow>`.
+
+### Endpoint 5: Keyset Feed Infinite Scroll (Challenge Part 2)
+- **Request:** `GET /api/orders/feed?limit=20` (and `?cursor=...`)
+- **Behavior:** High-performance keyset scrolling with `Window<Order>` and `ScrollPosition.keyset()`, avoiding $O(N)$ offset degradation.
+
+---
+
+## 6. Verification & Test Execution
 
 Run the complete automated test suite (31 tests across 19 test classes):
 
@@ -279,7 +330,7 @@ Run the complete automated test suite (31 tests across 19 test classes):
 
 ---
 
-## 6. Build & Test Result Verification
+## 7. Build & Test Result Verification
 
 ```text
 [INFO] -------------------------------------------------------
