@@ -2,6 +2,18 @@
 
 This task is implemented in the existing `edu.itc.se.shop` application. The original workspace did not contain JPA entities or repositories, so the small `Customer`, `Product`, `Order`, and `Tag` entities and their repositories were added to support the requested tests. Test schema is created and dropped by the `test` profile.
 
+## Database configuration
+
+The application uses PostgreSQL from Docker Compose at `localhost:5432`; set `POSTGRES_PASSWORD` in the same PowerShell session before starting the application. H2 is test-scoped and the test profile explicitly selects an in-memory H2 database, so automated tests do not require Docker.
+
+```powershell
+$env:POSTGRES_PASSWORD = "your-local-password"
+docker compose up -d postgres
+.\mvnw.cmd spring-boot:run
+```
+
+Do not commit a real database password. The Compose database stores its initialization credentials in the named volume, so changing the environment variable later does not automatically change the password already stored in that volume.
+
 ## What the tests demonstrate
 
 - `OrderService.markPaid` changes a managed order without calling `save()`. `OrderServiceTest` clears Hibernate statistics first, then verifies the reloaded status and exactly one entity update.
