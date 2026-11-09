@@ -3,8 +3,13 @@ package edu.itc.se.shop.repository;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.ScrollPosition;
+import org.springframework.data.domain.Slice;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Window;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -71,4 +76,10 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     @Query("select count(l) from OrderLine l where l.order.status = :status")
     long countLinesByStatus(@Param("status") OrderStatus status);
+
+    // Slice pagination for feed
+    Slice<OrderSummary> findSliceByOrderByPlacedAtDescIdDesc(Pageable pageable);
+
+    // Keyset scrolling for feed
+    Window<Order> findBy(ScrollPosition scrollPosition, Limit limit, Sort sort);
 }

@@ -56,6 +56,9 @@ public class Product {
     @Column(nullable = false)
     private int stock;
 
+    @jakarta.persistence.Version
+    private long version;
+
     @ManyToMany
     @JoinTable(
         name = "product_tag",
@@ -68,11 +71,15 @@ public class Product {
     }
 
     public Product(String sku, String name, Money price, Category category) {
+        this(sku, name, price, category, 0);
+    }
+
+    public Product(String sku, String name, Money price, Category category, int stock) {
         this.sku = sku;
         this.name = name;
         this.price = price;
         this.category = category;
-        this.stock = 0;
+        this.stock = stock;
     }
 
     public Product(String name, int stock) {
@@ -117,6 +124,10 @@ public class Product {
 
     public int getStock() {
         return stock;
+    }
+
+    public long getVersion() {
+        return version;
     }
 
     public Set<Tag> getTags() {

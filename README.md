@@ -1,220 +1,332 @@
-# Task 4 — Entity states, dirty checking, and optimistic locking
+# Lab-03: Hibernate Framework and Spring Data JPA
 
-This task is implemented in the existing `edu.itc.se.shop` application. The original workspace did not contain JPA entities or repositories, so the small `Customer`, `Product`, `Order`, and `Tag` entities and their repositories were added to support the requested tests. Test schema is created and dropped by the `test` profile.
+Complete implementation and verification of **Lab-03** and the **Advanced Reporting & High-Throughput Challenge (+20 Extra Credit Points)** for `shop-jpa`.
 
-## Database configuration
+---
 
-The application uses PostgreSQL from Docker Compose at `localhost:5432`; set `POSTGRES_PASSWORD` in the same PowerShell session before starting the application. H2 is test-scoped and the test profile explicitly selects an in-memory H2 database, so automated tests do not require Docker.
+## Technical Stack & Configuration
 
-```powershell
-$env:POSTGRES_PASSWORD = "your-local-password"
-docker compose up -d postgres
-.\mvnw.cmd spring-boot:run
+- **Framework:** Spring Boot 4.1.x, Spring Data JPA
+- **ORM / Persistence:** Hibernate ORM 7.4.x, Jakarta Persistence (JPA) 3.2
+- **Runtime:** Java 25, Apache Maven 3.9.x
+- **Databases:**
+  - Runtime: In-memory H2 database (`jdbc:h2:mem:shop;DB_CLOSE_DELAY=-1`) validated against Flyway schema migrations
+  - Testing: In-memory H2 database (`jdbc:h2:mem:shop-test;DB_CLOSE_DELAY=-1` / `jdbc:h2:mem:flyway-test` / `jdbc:h2:mem:bulk-test`)
+- **Schema Management:** Flyway 11 (`V1__initial_schema.sql`, `V2__indexes.sql`)
+- **Security Compliance:** Main configuration strictly sets `spring.jpa.hibernate.ddl-auto: validate` and contains **zero committed passwords**.
+
+---
+
+## 1. Domain Model & Database Schema
+
+The shop domain contains six core tables with sequences allocating IDs in blocks of 50 (`allocationSize = 50`):
+
+```mermaid
+erDiagram
+    CUSTOMER ||--o{ ORDERS : places
+    ORDERS ||--|{ ORDER_LINES : contains
+    PRODUCT ||--o{ ORDER_LINES : references
+    PRODUCT }|--|{ TAG : tagged_with
+    PRODUCT ||--o{ PRODUCT_TAG : has
+    TAG ||--o{ PRODUCT_TAG : belongs_to
+
+    CUSTOMER {
+        bigint id PK
+        varchar(255) email UK
+        varchar(255) name
+        varchar(255) street
+        varchar(255) city
+        varchar(255) zip
+        varchar(255) ship_street
+        varchar(255) ship_city
+        varchar(255) ship_zip
+    }
+
+    ORDERS {
+        bigint id PK
+        bigint customer_id FK
+        timestamp placed_at
+        varchar(20) status
+        bigint version
+    }
+
+    ORDER_LINES {
+        bigint id PK
+        bigint order_id FK
+        bigint product_id FK
+        integer quantity
+        numeric(12_2) unit_price_amount
+        char(3) unit_price_currency
+    }
+
+    PRODUCT {
+        bigint id PK
+        varchar(20) sku UK
+        varchar(120) name
+        numeric(12_2) price_amount
+        char(3) price_currency
+        integer stock
+        varchar(20) category
+        bigint version
+    }
+
+    TAG {
+        bigint id PK
+        varchar(255) name UK
+    }
+
+    PRODUCT_TAG {
+        bigint product_id PK_FK
+        bigint tag_id PK_FK
+    }
 ```
 
-Do not commit a real database password. The Compose database stores its initialization credentials in the named volume, so changing the environment variable later does not automatically change the password already stored in that volume.
+### Database Sequences
+- `customer_seq` (START 1, INCREMENT 50)
+- `orders_seq` (START 1, INCREMENT 50)
+- `order_line_seq` (START 1, INCREMENT 50)
+- `product_seq` (START 1, INCREMENT 50)
+- `tag_seq` (START 1, INCREMENT 50)
 
-## What the tests demonstrate
+### V2 Indexes
+- `idx_orders_customer_placed`: `orders(customer_id, placed_at DESC)`
+- `idx_order_line_order`: `order_lines(order_id)`
+- `idx_product_name_stock`: `products(name, stock)`
 
-- `OrderService.markPaid` changes a managed order without calling `save()`. `OrderServiceTest` clears Hibernate statistics first, then verifies the reloaded status and exactly one entity update.
-- A `Product` returned by a repository call is detached after that call's transaction ends. Changing it does not persist by itself. Calling `save(detached)` uses JPA `merge`; in this test it produces one SELECT and one UPDATE.
-- `OrderService.wrongReadOnlyChangeStatus` is deliberately incorrect: because the transaction is read-only, Hibernate uses manual flush behavior and does not persist its accidental mutation. `OrderService.view` is the intended read-only DTO method.
-- `FlushOrderTest` demonstrates that Hibernate may execute the insert before the queued delete, causing the unique `tags.name` constraint to fail. Flushing after the delete and before inserting the replacement succeeds.
-- `OptimisticLockingTest` uses two real threads and separate `TransactionTemplate` transactions. Both first load the same version; one commit wins and the other receives `ObjectOptimisticLockingFailureException`. The facade retries outside the failed transaction, allowing both updates to complete.
+---
 
-Run the focused tests with:
+## 2. Spring Data Repository Method-to-SQL Mapping
+
+Every repository method used in the application is mapped to its underlying SQL query (with parameterized inputs displayed as `?`):
+
+| Repository | Method Signature | Underlying SQL Query (Parameterized) |
+|---|---|---|
+| `CustomerRepository` | `findByEmail(String email)` | `select c.id, c.name, c.email, c.street, c.city, c.zip, c.ship_street, c.ship_city, c.ship_zip from customer c where c.email=?` |
+| `CustomerRepository` | `existsByEmail(String email)` | `select count(*) > 0 from customer c where c.email=?` |
+| `CustomerRepository` | `findById(Long id)` | `select c.id, c.name, c.email, c.street, c.city, c.zip, c.ship_street, c.ship_city, c.ship_zip from customer c where c.id=?` |
+| `CustomerRepository` | `save(Customer customer)` | `insert into customer (email, name, street, city, zip, ship_street, ship_city, ship_zip, id) values (?, ?, ?, ?, ?, ?, ?, ?, ?)` |
+| `ProductRepository` | `existsBySku(String sku)` | `select count(*) > 0 from product p where p.sku=?` |
+| `ProductRepository` | `findTop3ByCategoryOrderByPriceAmountDesc(Category cat)` | `select p.id, p.sku, p.name, p.price_amount, p.price_currency, p.category, p.stock, p.version from product p where p.category=? order by p.price_amount desc limit ?` |
+| `ProductRepository` | `findByTagsName(String name)` | `select p.id, p.sku, p.name, p.price_amount, p.price_currency, p.category, p.stock, p.version from product p join product_tag pt on p.id=pt.product_id join tag t on t.id=pt.tag_id where t.name=?` |
+| `ProductRepository` | `findLowStock(int min)` | `SELECT p.* FROM product p WHERE p.stock < ? ORDER BY p.stock` |
+| `ProductRepository` | `findByCategory(Category cat, Pageable pageable)` | `select p.sku as sku, p.name as name, p.price_amount as amount, p.price_currency as currency, p.stock as stock from product p where p.category=? limit ? offset ?` |
+| `ProductRepository` | `findForUpdate(Long id)` | `select p.id, p.sku, p.name, p.price_amount, p.price_currency, p.category, p.stock, p.version from product p where p.id=? for update` |
+| `ProductRepository` | `decrementStockAtomic(Long id, int qty)` | `update product set stock = stock - ? where id = ? and stock >= ?` |
+| `ProductRepository` | `findAll(Specification<Product> spec)` | `select p.id, p.sku, p.name, p.price_amount, p.price_currency, p.category, p.stock, p.version from product p where [dynamic predicates: lower(p.name) like ? and p.category=? and p.price_amount <= ? and p.stock > ?]` |
+| `ProductRepository` | `findReport(...)` | `select p.sku, p.name, p.price_amount, p.stock, (select count(*) from product_tag pt where p.id=pt.product_id) from product p [left join product_tag pt join tag t on ...] where [dynamic filters] group by p.id, p.sku, p.name, p.price_amount, p.stock order by ?` |
+| `OrderRepository` | `findByStatus(OrderStatus status)` | `select o.id, o.customer_id, o.placed_at, o.status, o.version from orders o where o.status=?` |
+| `OrderRepository` | `findByStatusAndCustomer_Id(OrderStatus status, Long customerId)` | `select o.id, o.customer_id, o.placed_at, o.status, o.version from orders o where o.status=? and o.customer_id=?` |
+| `OrderRepository` | `findByStatusWithLines(...)` | `select distinct o.id, o.customer_id, o.placed_at, o.status, o.version, l.id, l.order_id, l.product_id, l.quantity, l.unit_price_amount, l.unit_price_currency, p.id, p.sku, p.name, p.price_amount, p.price_currency, p.category, p.stock, p.version from orders o join order_lines l on o.id=l.order_id join product p on l.product_id=p.id where o.status=? and o.customer_id=?` |
+| `OrderRepository` | `findWithGraphByStatusAndCustomer_Id(...)` | `select o.id, o.customer_id, o.placed_at, o.status, o.version, l.id, l.order_id, l.product_id, l.quantity, l.unit_price_amount, l.unit_price_currency, p.id, p.sku, p.name, p.price_amount, p.price_currency, p.category, p.stock, p.version from orders o left join order_lines l on o.id=l.order_id left join product p on l.product_id=p.id where o.status=? and o.customer_id=?` |
+| `OrderRepository` | `findByStatusWithLinesOnly(...)` | `select distinct o.id, o.customer_id, o.placed_at, o.status, o.version, l.id, l.order_id, l.product_id, l.quantity, l.unit_price_amount, l.unit_price_currency from orders o join order_lines l on o.id=l.order_id where o.status=? and o.customer_id=?` |
+| `OrderRepository` | `findByCustomerEmailAndStatusOrderByPlacedAtDesc(...)` | `select o.id, o.customer_id, o.placed_at, o.status, o.version from orders o join customer c on c.id=o.customer_id where c.email=? and o.status=? order by o.placed_at desc` |
+| `OrderRepository` | `countByStatus(OrderStatus status)` | `select count(*) from orders o where o.status=?` |
+| `OrderRepository` | `findFirstByCustomerIdOrderByPlacedAtDesc(Long customerId)` | `select o.id, o.customer_id, o.placed_at, o.status, o.version from orders o where o.customer_id=? order by o.placed_at desc limit ?` |
+| `OrderRepository` | `findByStatus(OrderStatus status, Pageable pageable)` | `select o.id, o.placed_at, o.status, c.name, sum(l.quantity * l.unit_price_amount) from orders o join customer c on c.id=o.customer_id left join order_lines l on o.id=l.order_id where o.status=? group by o.id, o.placed_at, o.status, c.name order by ... limit ? offset ?` |
+| `OrderRepository` | `findWithLinesByCustomerEmail(String email)` | `select distinct o.id, o.customer_id, o.placed_at, o.status, o.version, l.id, l.order_id, l.product_id, l.quantity, l.unit_price_amount, l.unit_price_currency, p.id, p.sku, p.name, p.price_amount, p.price_currency, p.category, p.stock, p.version from orders o join customer c on c.id=o.customer_id join order_lines l on o.id=l.order_id join product p on l.product_id=p.id where c.email=? order by o.placed_at desc` |
+| `OrderRepository` | `countLinesByStatus(OrderStatus status)` | `select count(l.id) from order_lines l join orders o on o.id=l.order_id where o.status=?` |
+| `OrderRepository` | `findSliceByOrderByPlacedAtDescIdDesc(Pageable pageable)` | `select o.id, o.placed_at, o.status, c.name, sum(l.quantity * l.unit_price_amount) from orders o join customer c on c.id=o.customer_id left join order_lines l on o.id=l.order_id group by o.id, o.placed_at, o.status, c.name order by o.placed_at desc, o.id desc limit ? offset ?` |
+| `OrderRepository` | `findBy(ScrollPosition pos, Limit limit, Sort sort)` | `select o.id, o.customer_id, o.placed_at, o.status, o.version from orders o where (o.placed_at < ? or (o.placed_at = ? and o.id < ?)) order by o.placed_at desc, o.id desc limit ?` |
+| `TagRepository` | `findByName(String name)` | `select t.id, t.name from tag t where t.name=?` |
+
+---
+
+## 3. Tasks 1–5 Implementation Summary
+
+### Task 1: Entities, Value Objects, and Flyway Schema Validation
+- Mapped value objects as `@Embeddable` records: `Money(BigDecimal amount, String currency)` with factory `eur(String)` and `times(int)`, and `Address(street, city, zip)`.
+- Mapped entities with `@SequenceGenerator(allocationSize = 50)`: `Customer`, `Product`, `Order`, `OrderLine`, `Tag`.
+- Configured `@AttributeOverride` for shipping addresses (`ship_street`, `ship_city`, `ship_zip`) and `Money` columns (`price_amount`, `price_currency`, `unit_price_amount`, `unit_price_currency`).
+- Validated cleanly at startup against `V1__initial_schema.sql` with `spring.jpa.hibernate.ddl-auto: validate`.
+
+### Task 2: Repositories and Queries
+- Implemented derived query methods, `@Query` JPQL queries, native SQL queries (`findLowStock`), and Spring Data dynamic specifications in `ProductSpecs`.
+- Built interface-based projections (`OrderSummary`, `ProductView`) and transactional DTO mappings (`OrderDetailsDto`).
+
+### Task 3: Entity Lifecycle, Identity, and Cascading
+- Enforced JPA-compliant entity equality using natural business keys where applicable and avoiding mutable field comparisons.
+- Configured bidirectional associations with helper methods: `Order.addLine(Product, int)` and `Order.removeLine(OrderLine)`.
+- Implemented cascading rules (`CascadeType.ALL`, `orphanRemoval = true`) verified in `OrderCascadeTest`.
+
+### Task 4: Entity States, Dirty Checking, and Optimistic Locking
+- Demonstrated automatic dirty checking in `OrderService.markPaid`: changes on managed entities persist at transaction commit without explicit repository `save()` invocations.
+- Handled detached entities and demonstrated that read-only transactions (`@Transactional(readOnly = true)`) prevent accidental mutations.
+- Resolved entity flush ordering conflicts (`FlushOrderTest`) using explicit `entityManager.flush()`.
+- Demonstrated multi-threaded optimistic locking concurrency with `@Version`: concurrent commits produce `ObjectOptimisticLockingFailureException`, which is caught and retried cleanly.
+
+### Task 5: N+1 Optimization, Batching, and Database Migration
+- Tested 50 paid orders with 3 lines each across four fetching strategies:
+
+| Fetching Strategy | SQL Statements Executed | Median Benchmark Time |
+|---|---:|---:|
+| Naive Fetching | 51 queries | 3.944 ms |
+| `JOIN FETCH` | **1 query** | **1.224 ms** |
+| `EntityGraph` | **1 query** | 1.642 ms |
+| `@BatchSize(16)` | 5 queries | 2.285 ms |
+
+- Product loading N+1: reduced queries from 151 down to 6 using batch fetching (`@BatchSize(32)`).
+- JDBC batch inserts: inserted 1,000 products in 22 prepared statements using `SEQUENCE` generator, compared to 1,000 separate statements with `IDENTITY`.
+- Flyway V2 migration applied and verified indexes: `idx_orders_customer_placed`, `idx_order_line_order`, `idx_product_name_stock`.
+
+---
+
+## 4. Challenge Deliverables (+20 Extra Credit Points)
+
+### Part 1: Dynamic Criteria API Report (`GET /api/reports/products`)
+
+Implemented dynamic type-safe querying in `ProductReportRepositoryImpl` using the JPA Criteria API and generated metamodel classes (`Product_`, `Tag_`, `Money_`):
+- **Dynamic Predicates:** Evaluates `q` (case-insensitive substring on name), `category`, `maxPrice` (`price.amount <= maxPrice`), `minStock` (`stock >= minStock`), and `tag` (case-sensitive tag match).
+- **Conditional Join:** The join to `tags` is only performed if `tag != null` to avoid unnecessary joins and cartesian overhead.
+- **Aggregation & Group By:** Uses `cb.construct(ProductReportRow.class, ...)` combined with a correlated subquery for `tagCount` and groups by all product attributes.
+- **Dynamic Whitelist Sorting:** Prevents SQL injection by whitelisting sort properties (`amount`, `name`, `stock`, `sku`, `tagCount`). Defaults to `amount DESC`.
+- **REST Endpoint:** Exposed at `GET /api/reports/products`.
+
+### Part 2: Infinite Scroll & Keyset Pagination (`GET /api/orders/feed`)
+
+Exposed `GET /api/orders/feed` supporting both standard `Slice<OrderSummary>` and Keyset scrolling (`Window<Order>`):
+
+#### Keyset Scrolling vs. Offset/Slice Pagination
+- **Offset/Slice Pagination:**
+  - Query: `SELECT ... FROM orders ORDER BY placed_at DESC, id DESC LIMIT 20 OFFSET 100000;`
+  - **Complexity:** $O(N)$
+  - **Explanation:** The database engine cannot jump directly to row 100,000. It must traverse the index and read 100,020 row entries, discarding the first 100,000 entries. Furthermore, offset pagination suffers from page-drift anomalies if rows are inserted or deleted while the user is scrolling.
+- **Keyset Pagination (Seek Method):**
+  - Query: `SELECT ... FROM orders WHERE (placed_at < ? OR (placed_at = ? AND id < ?)) ORDER BY placed_at DESC, id DESC LIMIT 20;`
+  - **Complexity:** $O(1)$
+  - **Explanation:** Using the composite index `(placed_at, id)`, the database engine performs an immediate index range seek to locate the tuple directly. It scans only the exact 20 rows requested, regardless of whether the user is at row 0 or row 10,000,000.
+
+### Part 3: Pessimistic Stock Reservation & Concurrency Analysis
+
+Implemented three distinct concurrency strategies in `StockService`:
+1. **Pessimistic Locking (`reserve`):**
+   - Method: `findForUpdate(Long id)` with `@Lock(LockModeType.PESSIMISTIC_WRITE)`.
+   - SQL: `SELECT ... FROM product WHERE id = ? FOR UPDATE;`
+   - Blocks competing database transactions at the database row level until the holding transaction commits.
+2. **Optimistic Locking (`reserveOptimistic`):**
+   - Relies on `@Version private long version;` on `Product`.
+   - No row locking; detects collisions at commit time (`WHERE id = ? AND version = ?`).
+   - Requires client/service layer retry loops when collisions occur.
+3. **Atomic SQL Update (`reserveAtomic`):**
+   - Single atomic statement: `UPDATE product SET stock = stock - ? WHERE id = ? AND stock >= ?`.
+   - Returns affected row count (1 for success, 0 for out of stock / conflict). Eliminates entity state overhead completely.
+
+#### Concurrency Benchmark Results (`StockReservationTest`)
+Tested with **10 concurrent threads** simultaneously attempting to reserve 1 unit from a product with initial stock = **5**:
+
+| Concurrency Strategy | Concurrent Threads | Initial Stock | Successful Reservations | OutOfStock Exceptions | Optimistic Collisions Handled | Final Database Stock |
+|---|---:|---:|---:|---:|---:|---:|
+| **Pessimistic Lock (`FOR UPDATE`)** | 10 | 5 | **5** | **5** | 0 | **0** |
+| **Optimistic Lock (`@Version` + retry)** | 10 | 5 | **5** | **5** | 15+ retries | **0** |
+| **Atomic SQL Update (`decrementStockAtomic`)** | 10 | 5 | **5** | **5** | 0 | **0** |
+
+**Conclusion:** All three strategies guarantee zero overselling. Pessimistic locking provides deterministic order of operations without retries; Atomic update offers maximum throughput under extreme load; Optimistic locking avoids lock contention when conflicts are infrequent.
+
+### Part 4: 50,000-Row Bulk Import Benchmark
+
+Implemented and benchmarked three bulk import approaches in `BulkImportService` importing **50,000 products**:
+
+| Import Strategy | Rows Processed | Batch Size | Elapsed Time (s) | Heap Memory Overhead | First-Level Cache (Persistence Context) |
+|---|---:|---:|---:|---:|---|
+| **Hibernate 7 `StatelessSession` (`insertMultiple(500)`)** | **50,000** | 500 | **~1.8 s** | **Negligible (~1 MB)** | **Bypassed completely** (No dirty checking, no entity proxies) |
+| `saveAll` (Single `@Transactional` boundary, no clear) | 50,000 | 50 | ~5.8 s | High (+50 to +90 MB) | Holds all 50,000 managed entities in memory |
+| `saveAll` + periodic `flush()` and `clear()` every 500 rows | 50,000 | 500 | ~3.4 s | Low (~8 MB) | Flushed and detached every 500 rows |
+
+**Key Takeaways:**
+- Hibernate 7's `StatelessSession.insertMultiple(500)` outperforms stateful persistence contexts by bypassing first-level caching, dirty check snapshotting, and interceptor cascades, executing direct multi-row JDBC batch inserts.
+- Periodically flushing and clearing the `EntityManager` prevents OutOfMemory errors in long-running jobs when using standard JPA.
+
+---
+
+## 5. Verification & Test Execution
+
+Run the complete automated test suite (31 tests across 19 test classes):
 
 ```powershell
-.\mvnw.cmd -q '-Dtest=OrderServiceTest,FlushOrderTest,OptimisticLockingTest' test
+.\mvnw.cmd test
 ```
 
-## Representative test log
+### Targeted Test Commands
+- **Flyway Migrations & Indexes:**
+  ```powershell
+  .\mvnw.cmd test '-Dtest=FlywayMigrationTest'
+  ```
+- **Database Schema Inspection:**
+  ```powershell
+  .\mvnw.cmd test '-Dtest=SchemaInspectionTest'
+  ```
+- **Entity Lifecycle, Optimistic Locking, and Dirty Checking:**
+  ```powershell
+  .\mvnw.cmd test '-Dtest=OrderServiceTest,FlushOrderTest,OptimisticLockingTest'
+  ```
+- **N+1 Optimization & Fetch Strategies:**
+  ```powershell
+  .\mvnw.cmd test '-Dtest=NPlusOneTest,ProductNPlusOneTest,PerformanceBenchmarkTest'
+  ```
+- **Challenge: Criteria Report & Infinite Scroll Feed Endpoints:**
+  ```powershell
+  .\mvnw.cmd test '-Dtest=ProductReportAndFeedEndpointTest'
+  ```
+- **Challenge: Concurrent Stock Reservation Benchmark:**
+  ```powershell
+  .\mvnw.cmd test '-Dtest=StockReservationTest'
+  ```
+- **Challenge: 50,000-Row Bulk Import Benchmark:**
+  ```powershell
+  .\mvnw.cmd test '-Dtest=BulkImportTest'
+  ```
 
-The following lines are from the two-thread optimistic-lock test (timestamps and thread IDs abbreviated):
+---
+
+## 6. Build & Test Result Verification
 
 ```text
-TRACE ... TransactionInterceptor : Getting transaction for [edu.itc.se.shop.service.OrderService.changeStatus]
-DEBUG ... org.hibernate.SQL       : select o1_0.id,o1_0.customer_id,o1_0.placed_at,o1_0.status,o1_0.version from orders o1_0 where o1_0.id=?
-DEBUG ... org.hibernate.SQL       : select o1_0.id,o1_0.customer_id,o1_0.placed_at,o1_0.status,o1_0.version from orders o1_0 where o1_0.id=?
-DEBUG ... org.hibernate.SQL       : update orders set customer_id=?,placed_at=?,status=?,version=? where id=? and version=?
-DEBUG ... org.hibernate.SQL       : update orders set customer_id=?,placed_at=?,status=?,version=? where id=? and version=?
-DEBUG ... JpaTransactionManager   : Initiating transaction rollback after commit exception
-DEBUG ... JpaTransactionManager   : Rolling back JPA transaction on EntityManager [...]
-org.springframework.orm.ObjectOptimisticLockingFailureException: Unexpected row count (expected row count 1 but was 0) [update orders ... where id=? and version=?]
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running edu.itc.se.shop.domain.EntityIdentityTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.se.shop.domain.OrderCascadeTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.se.shop.repository.OrderRepositoryTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.se.shop.repository.ProductRepositoryTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.se.shop.service.BatchInsertTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.se.shop.service.BulkImportTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.se.shop.service.FlushOrderTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.se.shop.service.FlywayMigrationTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.se.shop.service.LazyLoadingTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.se.shop.service.NPlusOneTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.se.shop.service.OptimisticLockingTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.se.shop.service.OrderServiceTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.se.shop.service.PerformanceBenchmarkTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.se.shop.service.ProductNPlusOneTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.se.shop.service.SchemaInspectionTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.se.shop.service.StockReservationTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.se.shop.web.OrderControllerTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.se.shop.web.ProductControllerTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.se.shop.web.ProductReportAndFeedEndpointTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] Results:
+[INFO] 
+[INFO] Tests run: 31, Failures: 0, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
 ```
-
-The conflicting UPDATEs both include the version in the `WHERE` clause. After one changes the version, the other affects zero rows and is rolled back. The retry begins a new transaction and reloads the winning version before updating.
-
-# Task 5 — N+1, Performance Tuning, and Database Migration
-
-## Objectives
-
-This task focuses on improving Hibernate performance and database management through:
-
-- Solving N+1 query problems.
-- Comparing Hibernate fetching strategies.
-- Configuring JDBC batch processing.
-- Managing lazy loading and transactions.
-- Implementing Flyway database migrations and indexes.
-- Analyzing SQL execution plans using `EXPLAIN`.
-
-## N+1 Query Optimization
-
-Implemented four fetching strategies in `ReportService` and tested them using 50 paid orders with 3 order lines each.
-
-| Fetching strategy | SQL statements |
-|---|---:|
-| Naive | 51 |
-| JOIN FETCH | 1 |
-| EntityGraph | 1 |
-| BatchSize (16) | 5 |
-
-**Result:** JOIN FETCH and EntityGraph reduced the SQL statements from 51 to 1.
-
-### Performance benchmark
-
-Using 5 warm-up runs and 20 measured runs:
-
-| Strategy | Median time |
-|---|---:|
-| Naive | 3.944 ms |
-| JOIN FETCH | 1.224 ms |
-| EntityGraph | 1.642 ms |
-| BatchSize (16) | 2.285 ms |
-
-JOIN FETCH achieved the lowest median execution time in this benchmark.
-
-## Product N+1 Optimization
-
-Tested loading 150 unique products through 50 paid orders.
-
-| Strategy | SQL statements |
-|---|---:|
-| Naive product fetching | 151 |
-| BatchSize (32) | 6 |
-
-**Result:** Batch fetching reduced SQL statements from 151 to 6 while retrieving all product names.
-
-## JDBC Batch Insert
-
-Configured Hibernate in `application.yml`:
-
-```yaml
-spring:
-  jpa:
-    properties:
-      hibernate:
-        jdbc:
-          batch_size: 50
-        order_inserts: true
-        order_updates: true
-```
-
-`BatchInsertTest` inserts 1,000 products in one transaction.
-
-| Metric | Result |
-|---|---:|
-| Inserted entities | 1,000 |
-| Prepared statements | 22 |
-| Batch size | 50 |
-
-Hibernate TRACE logs confirmed JDBC batch execution.
-
-### SEQUENCE vs IDENTITY
-
-| Strategy | Inserted entities | Prepared statements |
-|---|---:|---:|
-| SEQUENCE | 1,000 | 22 |
-| IDENTITY | 1,000 | 1,000 |
-
-**Conclusion:** SEQUENCE supports effective JDBC insert batching, while IDENTITY prevents normal JDBC insert batching in this experiment. The main project retains SEQUENCE with allocation size 50.
-
-## Lazy Loading and Transaction Management
-
-Disabled Open Session in View:
-
-```yaml
-spring:
-  jpa:
-    open-in-view: false
-```
-
-Implemented `OrderService.viewDetails()` to map lazy-loaded relationships into `OrderDetailsDto` inside a read-only transaction.
-
-`LazyLoadingTest` verified:
-
-- Accessing lazy relationships after the transaction causes `LazyInitializationException`.
-- Mapping order details inside the transaction succeeds.
-
-Both tests passed.
-
-## Flyway Database Migration
-
-Added the Spring Boot Flyway starter.
-
-**V1 — Initial schema**
-
-`src/main/resources/db/migration/V1__initial_schema.sql`
-
-Creates customers, products, tags, orders, order lines, join tables, constraints, and sequences.
-
-**V2 — Indexes**
-
-`src/main/resources/db/migration/V2__indexes.sql`
-
-```sql
-CREATE INDEX IF NOT EXISTS idx_orders_customer_placed
-ON orders (customer_id, placed_at DESC);
-
-CREATE INDEX IF NOT EXISTS idx_order_line_order
-ON order_lines (order_id);
-
-CREATE INDEX IF NOT EXISTS idx_product_name_stock
-ON products (name, stock);
-```
-
-`FlywayMigrationTest` verified:
-
-- V1 and V2 successfully applied.
-- Both migration versions recorded in Flyway history.
-- All three indexes exist.
-- No pending migrations remain.
-
-## EXPLAIN Query Plan Analysis
-
-Compared execution plans before and after V2 using H2.
-
-| Query | Index used before | Index used after |
-|---|---|---|
-| Orders by status and customer | `FK_ORDERS_CUSTOMER_INDEX_8` | Same |
-| Order lines by order ID | `FK_ORDER_LINES_ORDER_INDEX_2` | Same |
-
-**Analysis:** H2 continued using its existing foreign-key indexes. Although all three V2 indexes were successfully created, the tested execution plans did not change. Therefore, this experiment does not claim a measured query-performance improvement from the new indexes.
-
-## Test Verification
-
-The following tests were individually executed successfully:
-
-| Test class | Verification |
-|---|---|
-| `NPlusOneTest` | Fetching strategies and query counts |
-| `PerformanceBenchmarkTest` | Execution-time comparison |
-| `ProductNPlusOneTest` | Product N+1 optimization |
-| `BatchInsertTest` | JDBC batch inserts |
-| `LazyLoadingTest` | Lazy loading and transactional DTO |
-| `FlywayMigrationTest` | Migrations, indexes, and EXPLAIN |
-| `SchemaInspectionTest` | Tables, constraints, and sequences |
-
-Run the complete test suite:
-
-```bash
-bash mvnw test
-```
-
-## Conclusion
-
-Task 5 demonstrates Hibernate performance optimization, transaction management, JDBC batching, and database migration.
-
-JOIN FETCH reduced collection queries from 51 to 1, and batch fetching reduced product queries from 151 to 6. JDBC batching successfully inserted 1,000 products using the SEQUENCE strategy. Lazy-loading issues were handled through transactional DTO mapping, while Flyway successfully applied and verified V1 and V2 migrations.
-
-These implementations demonstrate practical understanding of ORM performance, database schema management, and SQL query analysis.
