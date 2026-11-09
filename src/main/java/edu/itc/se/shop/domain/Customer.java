@@ -1,10 +1,19 @@
+
 package edu.itc.se.shop.domain;
 
-import jakarta.persistence.*;
-import java.util.Objects;
+import jakarta.persistence.AttributeOverride;
+import jakarta.persistence.AttributeOverrides;
+import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.SequenceGenerator;
+import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "customers")
+@Table(name = "customer")
 public class Customer {
 
     @Id
@@ -18,13 +27,13 @@ public class Customer {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @Embedded
+       @Embedded
     @AttributeOverrides({
-        @AttributeOverride(name = "street", column = @Column(name = "shipping_street")),
-        @AttributeOverride(name = "city", column = @Column(name = "shipping_city")),
-        @AttributeOverride(name = "state", column = @Column(name = "shipping_state")),
-        @AttributeOverride(name = "zipCode", column = @Column(name = "shipping_zip_code")),
-        @AttributeOverride(name = "country", column = @Column(name = "shipping_country"))
+        @AttributeOverride(name = "street", column = @Column(name = "ship_street")),
+        @AttributeOverride(name = "city", column = @Column(name = "ship_city")),
+        @AttributeOverride(name = "state", column = @Column(name = "ship_state")),
+        @AttributeOverride(name = "zipCode", column = @Column(name = "ship_zip_code")),
+        @AttributeOverride(name = "country", column = @Column(name = "ship_country"))
     })
     private Address shippingAddress;
 
@@ -38,7 +47,8 @@ public class Customer {
     })
     private Address billingAddress;
 
-    public Customer() {}
+    protected Customer() {
+    }
 
     public Customer(String name, String email) {
         this.name = name;
@@ -54,10 +64,6 @@ public class Customer {
 
     public Long getId() {
         return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
     }
 
     public String getName() {
@@ -95,8 +101,9 @@ public class Customer {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Customer other)) return false;
-        return email != null && email.equals(other.email);
+        if (o == null || getClass() != o.getClass()) return false;
+        Customer customer = (Customer) o;
+        return id != null && id.equals(customer.id);
     }
 
     @Override

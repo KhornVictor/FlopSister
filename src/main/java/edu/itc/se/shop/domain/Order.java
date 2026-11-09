@@ -1,10 +1,26 @@
+
 package edu.itc.se.shop.domain;
 
-import jakarta.persistence.*;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
+
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.SequenceGenerator;
+import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 
 @Entity
 @Table(name = "orders")
@@ -12,56 +28,87 @@ public class Order {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "order_seq_gen")
-    @SequenceGenerator(name = "order_seq_gen", sequenceName = "order_seq", allocationSize = 50)
+    @SequenceGenerator(name = "order_seq_gen", sequenceName = "orders_seq", allocationSize = 50)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "customer_id", nullable = false)
     private Customer customer;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 30)
-    private OrderStatus status = OrderStatus.PENDING;
+   @Enumerated(EnumType.STRING)
+@Column(nullable = false, length = 20)
+private OrderStatus status = OrderStatus.PENDING;
 
     @Column(name = "placed_at", nullable = false)
-    private LocalDateTime placedAt = LocalDateTime.now();
+    private Instant placedAt = Instant.now();
 
     @Version
-    private int version;
+    private long version;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderLine> lines = new ArrayList<>();
 
-    public Order() {}
+    protected Order() {
+    }
 
     public Order(Customer customer) {
-        this.customer = customer;
-        this.placedAt = LocalDateTime.now();
-        this.status = OrderStatus.PENDING;
-    }
+    this.customer = customer;
+    this.status = OrderStatus.PENDING;
+}
 
     public Order(Customer customer, OrderStatus status) {
         this.customer = customer;
         this.status = status;
-        this.placedAt = LocalDateTime.now();
+        this.placedAt = Instant.now();
     }
 
-    public void addLine(Product product, int quantity, Money unitPrice) {
-        OrderLine line = new OrderLine(this, product, quantity, unitPrice);
-        this.lines.add(line);
+   public OrderLine addLine(Product product, int quantity) {
+    if (product == null) {
+        throw new IllegalArgumentException("Product cannot be null");
     }
+
+    if (quantity <= 0) {
+        throw new IllegalArgumentException("Quantity must be positive");
+    }
+
+    OrderLine line = new OrderLine(this, product, quantity, product.getPrice());
+    lines.add(line);
+
+    return line;
+}
 
     public void removeLine(OrderLine line) {
-        this.lines.remove(line);
-        line.setOrder(null);
+        if (line != null && lines.remove(line)) {
+            line.setOrder(null);
+        }
+    }
+
+    public Money total() {
+        if (lines.isEmpty()) {
+            return Money.eur("0.00");
+        }
+
+        Money total = lines.get(0).getUnitPrice().times(lines.get(0).getQuantity());
+
+        for (int i = 1; i < lines.size(); i++) {
+            OrderLine line = lines.get(i);
+            Money lineTotal = line.getUnitPrice().times(line.getQuantity());
+
+            if (!total.currency().equals(lineTotal.currency())) {
+                throw new IllegalStateException("Cannot total different currencies");
+            }
+
+            total = new Money(
+                    total.amount().add(lineTotal.amount()),
+                    total.currency()
+            );
+        }
+
+        return total;
     }
 
     public Long getId() {
         return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
     }
 
     public Customer getCustomer() {
@@ -80,35 +127,24 @@ public class Order {
         this.status = status;
     }
 
-    public LocalDateTime getPlacedAt() {
+    public Instant getPlacedAt() {
         return placedAt;
     }
 
-    public void setPlacedAt(LocalDateTime placedAt) {
-        this.placedAt = placedAt;
-    }
-
-    public int getVersion() {
+    public long getVersion() {
         return version;
     }
 
-    public void setVersion(int version) {
-        this.version = version;
-    }
-
     public List<OrderLine> getLines() {
-        return lines;
-    }
-
-    public void setLines(List<OrderLine> lines) {
-        this.lines = lines;
+        return Collections.unmodifiableList(lines);
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Order other)) return false;
-        return id != null && id.equals(other.id);
+        if (o == null || getClass() != o.getClass()) return false;
+        Order order = (Order) o;
+        return id != null && id.equals(order.id);
     }
 
     @Override

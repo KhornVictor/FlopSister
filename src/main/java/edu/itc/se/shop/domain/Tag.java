@@ -1,60 +1,53 @@
+
 package edu.itc.se.shop.domain;
-
-import jakarta.persistence.*;
 import java.util.HashSet;
-import java.util.Objects;
 import java.util.Set;
-
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.ManyToMany;
+import jakarta.persistence.SequenceGenerator;
+import jakarta.persistence.Table;
 @Entity
-@Table(name = "tags")
+@Table(name = "tag")
 public class Tag {
-
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "tag_seq_gen")
     @SequenceGenerator(name = "tag_seq_gen", sequenceName = "tag_seq", allocationSize = 50)
     private Long id;
-
     @Column(nullable = false, unique = true)
     private String name;
-
     @ManyToMany(mappedBy = "tags")
     private Set<Product> products = new HashSet<>();
-
-    public Tag() {}
-
+    protected Tag() {
+    }
     public Tag(String name) {
         this.name = name;
     }
-
     public Long getId() {
         return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
     }
 
     public String getName() {
         return name;
     }
-
     public void setName(String name) {
         this.name = name;
     }
-
-    public Set<Product> getProducts() {
-        return products;
+           public Set<Product> getProducts() {
+        return Set.copyOf(products);
     }
-
-    public void setProducts(Set<Product> products) {
-        this.products = products;
+    void addProduct(Product product) {
+        products.add(product);
     }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Tag other)) return false;
-        return name != null && name.equals(other.name);
+        if (o == null || getClass() != o.getClass()) return false;
+        Tag tag = (Tag) o;
+        return id != null && id.equals(tag.id);
     }
 
     @Override
