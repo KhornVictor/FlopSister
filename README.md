@@ -164,6 +164,12 @@ Every repository method used in the application is mapped to its underlying SQL 
 - JDBC batch inserts: inserted 1,000 products in 22 prepared statements using `SEQUENCE` generator, compared to 1,000 separate statements with `IDENTITY`.
 - Flyway V2 migration applied and verified indexes: `idx_orders_customer_placed`, `idx_order_line_order`, `idx_product_name_stock`.
 
+#### Flyway Schema History & EXPLAIN Execution Plan (H2 Console)
+
+Screenshot showing `flyway_schema_history` with applied migration versions 1 and 2, along with query execution plan `EXPLAIN`:
+
+![H2-Console-Image](H2-Console.png)
+
 ---
 
 ## 4. Challenge Deliverables (+20 Extra Credit Points)
