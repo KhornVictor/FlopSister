@@ -1,6 +1,18 @@
 package edu.itc.se.shop.domain;
 
-import jakarta.persistence.*;
+import jakarta.persistence.AttributeOverride;
+import jakarta.persistence.AttributeOverrides;
+import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.SequenceGenerator;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "order_line")
@@ -30,20 +42,11 @@ public class OrderLine {
     @AttributeOverrides({
         @AttributeOverride(
             name = "amount",
-            column = @Column(
-                name = "unit_price_amount",
-                nullable = false,
-                precision = 12,
-                scale = 2
-            )
+            column = @Column(name = "unit_price_amount", nullable = false, precision = 12, scale = 2)
         ),
         @AttributeOverride(
             name = "currency",
-            column = @Column(
-                name = "unit_price_currency",
-                nullable = false,
-                length = 3
-            )
+            column = @Column(name = "unit_price_currency", nullable = false, length = 3)
         )
     })
     private Money unitPrice;
@@ -52,6 +55,13 @@ public class OrderLine {
     }
 
     public OrderLine(Order order, Product product, int quantity, Money unitPrice) {
+        if (order == null || product == null || unitPrice == null) {
+            throw new IllegalArgumentException("Order, product, and unit price cannot be null");
+        }
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Quantity must be positive");
+        }
+
         this.order = order;
         this.product = product;
         this.quantity = quantity;
@@ -78,7 +88,43 @@ public class OrderLine {
         return quantity;
     }
 
+    public void setQuantity(int quantity) {
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Quantity must be positive");
+        }
+        this.quantity = quantity;
+    }
+
     public Money getUnitPrice() {
         return unitPrice;
+    }
+
+    public void setUnitPrice(Money unitPrice) {
+        if (unitPrice == null) {
+            throw new IllegalArgumentException("Unit price cannot be null");
+        }
+        this.unitPrice = unitPrice;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        OrderLine that = (OrderLine) o;
+        return id != null && id.equals(that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "OrderLine{" +
+                "id=" + id +
+                ", quantity=" + quantity +
+                ", unitPrice=" + unitPrice +
+                '}';
     }
 }
