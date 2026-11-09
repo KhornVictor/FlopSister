@@ -1,19 +1,29 @@
 spring:
+  flyway:
+    enabled: false
+
   datasource:
     url: jdbc:h2:mem:shop-test;DB_CLOSE_DELAY=-1
     username: sa
     password: ""
     driver-class-name: org.h2.Driver
+
   jpa:
     hibernate:
       ddl-auto: create-drop
     properties:
       hibernate:
         generate_statistics: true
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+
   flyway:
     enabled: false
 logging:
   level:
     org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.batch: TRACE
     org.springframework.orm.jpa: DEBUG
     org.springframework.transaction.interceptor: TRACE

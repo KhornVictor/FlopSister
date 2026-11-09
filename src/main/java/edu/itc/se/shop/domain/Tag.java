@@ -17,6 +17,8 @@ import jakarta.persistence.Table;
 public class Tag {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "tag_seq")
+    @SequenceGenerator(name = "tag_seq", sequenceName = "tag_seq", allocationSize = 50)
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "tag_seq_gen")
     @SequenceGenerator(name = "tag_seq_gen", sequenceName = "tag_seq", allocationSize = 50)
     private Long id;
@@ -42,6 +44,8 @@ public class Tag {
         return name;
     }
 
+    public Set<Product> getProducts() {
+        return products;
     public void setName(String name) {
         this.name = name;
     }

@@ -16,6 +16,8 @@ import jakarta.persistence.Table;
 public class Customer {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "customer_seq")
+    @SequenceGenerator(name = "customer_seq", sequenceName = "customer_seq", allocationSize = 50)
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "customer_seq_gen")
     @SequenceGenerator(
         name = "customer_seq_gen",

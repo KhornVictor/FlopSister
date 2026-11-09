@@ -1,5 +1,6 @@
 package edu.itc.se.shop.domain;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.AttributeOverrides;
 import jakarta.persistence.Column;
@@ -15,6 +16,18 @@ import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 
 @Entity
+@Table(name = "order_lines")
+public class OrderLine {
+    @Id
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "order_line_seq")
+    @SequenceGenerator(name = "order_line_seq", sequenceName = "order_line_seq", allocationSize = 50)
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "order_id", nullable = false)
+    private Order order;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
 @Table(name = "order_line")
 public class OrderLine {
 
@@ -38,6 +51,13 @@ public class OrderLine {
     @Column(nullable = false)
     private int quantity;
 
+    protected OrderLine() {
+    }
+
+    public OrderLine(Order order, Product product, int quantity) {
+        this.order = order;
+        this.product = product;
+        this.quantity = quantity;
     @Embedded
     @AttributeOverrides({
         @AttributeOverride(

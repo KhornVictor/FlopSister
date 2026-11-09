@@ -24,5 +24,6 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
     @Query(value = "SELECT p.* FROM product p WHERE p.stock < :min ORDER BY p.stock", nativeQuery = true)
     List<Product> findLowStock(@Param("min") int min);
 
+public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpecificationExecutor<Product> {
     Page<ProductView> findByCategory(Category category, Pageable pageable);
 }
