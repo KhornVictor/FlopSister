@@ -1,4 +1,3 @@
-
 package edu.itc.se.shop.domain;
 
 import jakarta.persistence.AttributeOverride;
@@ -18,7 +17,11 @@ public class Customer {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "customer_seq_gen")
-    @SequenceGenerator(name = "customer_seq_gen", sequenceName = "customer_seq", allocationSize = 50)
+    @SequenceGenerator(
+        name = "customer_seq_gen",
+        sequenceName = "customer_seq",
+        allocationSize = 50
+    )
     private Long id;
 
     @Column(nullable = false)
@@ -27,25 +30,16 @@ public class Customer {
     @Column(nullable = false, unique = true)
     private String email;
 
-       @Embedded
-    @AttributeOverrides({
-        @AttributeOverride(name = "street", column = @Column(name = "ship_street")),
-        @AttributeOverride(name = "city", column = @Column(name = "ship_city")),
-        @AttributeOverride(name = "state", column = @Column(name = "ship_state")),
-        @AttributeOverride(name = "zipCode", column = @Column(name = "ship_zip_code")),
-        @AttributeOverride(name = "country", column = @Column(name = "ship_country"))
-    })
-    private Address shippingAddress;
+    @Embedded
+    private Address billing;
 
     @Embedded
     @AttributeOverrides({
-        @AttributeOverride(name = "street", column = @Column(name = "billing_street")),
-        @AttributeOverride(name = "city", column = @Column(name = "billing_city")),
-        @AttributeOverride(name = "state", column = @Column(name = "billing_state")),
-        @AttributeOverride(name = "zipCode", column = @Column(name = "billing_zip_code")),
-        @AttributeOverride(name = "country", column = @Column(name = "billing_country"))
+        @AttributeOverride(name = "street", column = @Column(name = "ship_street")),
+        @AttributeOverride(name = "city", column = @Column(name = "ship_city")),
+        @AttributeOverride(name = "zip", column = @Column(name = "ship_zip"))
     })
-    private Address billingAddress;
+    private Address shipping;
 
     protected Customer() {
     }
@@ -55,11 +49,11 @@ public class Customer {
         this.email = email;
     }
 
-    public Customer(String name, String email, Address shippingAddress, Address billingAddress) {
+    public Customer(String name, String email, Address billing, Address shipping) {
         this.name = name;
         this.email = email;
-        this.shippingAddress = shippingAddress;
-        this.billingAddress = billingAddress;
+        this.billing = billing;
+        this.shipping = shipping;
     }
 
     public Long getId() {
@@ -82,20 +76,20 @@ public class Customer {
         this.email = email;
     }
 
-    public Address getShippingAddress() {
-        return shippingAddress;
+    public Address getBilling() {
+        return billing;
     }
 
-    public void setShippingAddress(Address shippingAddress) {
-        this.shippingAddress = shippingAddress;
+    public void setBilling(Address billing) {
+        this.billing = billing;
     }
 
-    public Address getBillingAddress() {
-        return billingAddress;
+    public Address getShipping() {
+        return shipping;
     }
 
-    public void setBillingAddress(Address billingAddress) {
-        this.billingAddress = billingAddress;
+    public void setShipping(Address shipping) {
+        this.shipping = shipping;
     }
 
     @Override

@@ -1,4 +1,3 @@
-
 package edu.itc.se.shop.domain;
 
 import java.time.Instant;
@@ -28,16 +27,16 @@ public class Order {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "order_seq_gen")
-    @SequenceGenerator(name = "order_seq_gen", sequenceName = "orders_seq", allocationSize = 50)
+    @SequenceGenerator(name = "order_seq_gen", sequenceName = "order_seq", allocationSize = 50)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "customer_id", nullable = false)
     private Customer customer;
 
-   @Enumerated(EnumType.STRING)
-@Column(nullable = false, length = 20)
-private OrderStatus status = OrderStatus.PENDING;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private OrderStatus status = OrderStatus.NEW;
 
     @Column(name = "placed_at", nullable = false)
     private Instant placedAt = Instant.now();
@@ -52,9 +51,9 @@ private OrderStatus status = OrderStatus.PENDING;
     }
 
     public Order(Customer customer) {
-    this.customer = customer;
-    this.status = OrderStatus.PENDING;
-}
+        this.customer = customer;
+        this.status = OrderStatus.NEW;
+    }
 
     public Order(Customer customer, OrderStatus status) {
         this.customer = customer;
@@ -62,20 +61,18 @@ private OrderStatus status = OrderStatus.PENDING;
         this.placedAt = Instant.now();
     }
 
-   public OrderLine addLine(Product product, int quantity) {
-    if (product == null) {
-        throw new IllegalArgumentException("Product cannot be null");
+    public OrderLine addLine(Product product, int quantity) {
+        if (product == null) {
+            throw new IllegalArgumentException("Product cannot be null");
+        }
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Quantity must be positive");
+        }
+
+        OrderLine line = new OrderLine(this, product, quantity, product.getPrice());
+        lines.add(line);
+        return line;
     }
-
-    if (quantity <= 0) {
-        throw new IllegalArgumentException("Quantity must be positive");
-    }
-
-    OrderLine line = new OrderLine(this, product, quantity, product.getPrice());
-    lines.add(line);
-
-    return line;
-}
 
     public void removeLine(OrderLine line) {
         if (line != null && lines.remove(line)) {
@@ -89,7 +86,6 @@ private OrderStatus status = OrderStatus.PENDING;
         }
 
         Money total = lines.get(0).getUnitPrice().times(lines.get(0).getQuantity());
-
         for (int i = 1; i < lines.size(); i++) {
             OrderLine line = lines.get(i);
             Money lineTotal = line.getUnitPrice().times(line.getQuantity());
@@ -98,10 +94,7 @@ private OrderStatus status = OrderStatus.PENDING;
                 throw new IllegalStateException("Cannot total different currencies");
             }
 
-            total = new Money(
-                    total.amount().add(lineTotal.amount()),
-                    total.currency()
-            );
+            total = new Money(total.amount().add(lineTotal.amount()), total.currency());
         }
 
         return total;

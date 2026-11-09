@@ -1,4 +1,3 @@
-
 package edu.itc.se.shop.domain;
 
 import java.util.HashSet;
@@ -43,7 +42,7 @@ public class Product {
         ),
         @AttributeOverride(
             name = "currency",
-            column = @Column(name = "price_currency", nullable = false, columnDefinition = "CHAR(3)")
+            column = @Column(name = "price_currency", nullable = false, length = 3)
         )
     })
     private Money price;
@@ -71,6 +70,7 @@ public class Product {
         this.name = name;
         this.price = price;
         this.category = category;
+        this.stock = 0;
     }
 
     public void tag(Tag tag) {
@@ -78,6 +78,7 @@ public class Product {
             tag.addProduct(this);
         }
     }
+
     public Long getId() {
         return id;
     }

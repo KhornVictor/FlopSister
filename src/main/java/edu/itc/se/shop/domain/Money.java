@@ -1,4 +1,3 @@
-
 package edu.itc.se.shop.domain;
 
 import java.math.BigDecimal;
@@ -15,7 +14,7 @@ public record Money(
         BigDecimal amount,
 
         @JdbcTypeCode(SqlTypes.CHAR)
-        @Column(name = "currency", nullable = false, columnDefinition = "CHAR(3)")
+        @Column(name = "currency", nullable = false, length = 3)
         String currency
 ) {
 
@@ -24,9 +23,6 @@ public record Money(
     }
 
     public Money times(int qty) {
-        return new Money(
-                amount.multiply(BigDecimal.valueOf(qty)),
-                currency
-        );
+        return new Money(amount.multiply(BigDecimal.valueOf(qty)), currency);
     }
 }
