@@ -1,8 +1,5 @@
 package edu.itc.se.shop.domain;
 
-import java.util.HashSet;
-import java.util.Set;
-
 import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.Set;
@@ -123,7 +120,7 @@ public class Product {
     }
 
     public Set<Tag> getTags() {
-        return Set.copyOf(tags);
+        return tags;
     }
 
     public void setName(String name) {
@@ -141,13 +138,10 @@ public class Product {
         this.stock = stock;
     }
 
-    public Set<Tag> getTags() {
-        return tags;
+    public void addTag(Tag tag) {
+        tag(tag);
     }
 
-    public void addTag(Tag tag) {
-        this.tags.add(tag);
-        tag.getProducts().add(this);
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

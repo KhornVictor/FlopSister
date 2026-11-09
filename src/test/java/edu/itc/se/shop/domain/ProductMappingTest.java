@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @AutoConfigureTestDatabase(
     replace = AutoConfigureTestDatabase.Replace.NONE
 )
+@org.springframework.test.context.ActiveProfiles("test")
 class ProductMappingTest {
 
     @Autowired

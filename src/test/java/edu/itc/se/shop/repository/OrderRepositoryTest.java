@@ -29,6 +29,7 @@ import jakarta.persistence.EntityManager;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@org.springframework.test.context.ActiveProfiles("test")
 class OrderRepositoryTest {
 
     @Autowired

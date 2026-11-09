@@ -17,6 +17,7 @@ import jakarta.persistence.EntityManager;
 @AutoConfigureTestDatabase(
         replace = AutoConfigureTestDatabase.Replace.NONE
 )
+@org.springframework.test.context.ActiveProfiles("test")
 class ProductTagMappingTest {
 
     @Autowired

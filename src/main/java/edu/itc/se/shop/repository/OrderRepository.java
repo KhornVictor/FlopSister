@@ -1,18 +1,18 @@
 package edu.itc.se.shop.repository;
 
 import java.util.List;
-
-import org.springframework.data.jpa.repository.EntityGraph;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import edu.itc.se.shop.domain.Order;
 import edu.itc.se.shop.domain.OrderStatus;
+import edu.itc.se.shop.web.dto.OrderSummary;
 
 public interface OrderRepository extends JpaRepository<Order, Long> {
 
@@ -51,10 +51,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findByStatusWithLinesOnly(
             @Param("status") OrderStatus status,
             @Param("customerId") Long customerId);
-}
-import edu.itc.se.shop.web.dto.OrderSummary;
-
-public interface OrderRepository extends JpaRepository<Order, Long> {
 
     List<Order> findByCustomerEmailAndStatusOrderByPlacedAtDesc(String email, OrderStatus status);
 

@@ -27,8 +27,6 @@ public class Order {
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "orders_seq")
     @SequenceGenerator(name = "orders_seq", sequenceName = "orders_seq", allocationSize = 50)
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "order_seq_gen")
-    @SequenceGenerator(name = "order_seq_gen", sequenceName = "orders_seq", allocationSize = 50)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -143,9 +141,6 @@ public class Order {
         return lines;
     }
 
-    public void addLine(Product product, int quantity) {
-        OrderLine line = new OrderLine(this, product, quantity);
-        this.lines.add(line);
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
