@@ -1,9 +1,5 @@
 # Lab-03: Hibernate Framework and Spring Data JPA
 
-Complete implementation and verification of **Lab-03** and the **Advanced Reporting & High-Throughput Challenge (+20 Extra Credit Points)** for `shop-jpa`.
-
----
-
 ## Technical Stack & Configuration
 
 - **Framework:** Spring Boot 4.1.x, Spring Data JPA
