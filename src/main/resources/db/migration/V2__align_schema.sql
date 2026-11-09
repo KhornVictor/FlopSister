@@ -8,12 +8,18 @@ ALTER TABLE order_lines RENAME TO order_line;
 -- 2. Rename the order sequence
 ALTER SEQUENCE order_seq RENAME TO orders_seq;
 
--- 3. Rename customer shipping columns
+-- 3. Rename customer shipping and billing columns
 ALTER TABLE customer RENAME COLUMN shipping_street TO ship_street;
 ALTER TABLE customer RENAME COLUMN shipping_city TO ship_city;
-ALTER TABLE customer RENAME COLUMN shipping_state TO ship_state;
-ALTER TABLE customer RENAME COLUMN shipping_zip_code TO ship_zip_code;
-ALTER TABLE customer RENAME COLUMN shipping_country TO ship_country;
+ALTER TABLE customer RENAME COLUMN shipping_zip_code TO ship_zip;
+ALTER TABLE customer DROP COLUMN IF EXISTS shipping_state;
+ALTER TABLE customer DROP COLUMN IF EXISTS shipping_country;
+
+ALTER TABLE customer RENAME COLUMN billing_street TO street;
+ALTER TABLE customer RENAME COLUMN billing_city TO city;
+ALTER TABLE customer RENAME COLUMN billing_zip_code TO zip;
+ALTER TABLE customer DROP COLUMN IF EXISTS billing_state;
+ALTER TABLE customer DROP COLUMN IF EXISTS billing_country;
 
 -- 4. Align product columns
 ALTER TABLE product

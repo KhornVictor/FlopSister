@@ -4,5 +4,6 @@ public enum Category {
     BOOKS,
     HARDWARE,
     TOYS,
-    FOOD
+    FOOD,
+    ELECTRONICS
 }
