@@ -5,10 +5,14 @@ import java.util.List;
 
 import edu.itc.shop.api.dto.ProductDto;
 import edu.itc.shop.api.dto.StockChange;
+import edu.itc.shop.api.params.ProductFilter;
 import edu.itc.shop.domain.DuplicateSkuException;
 import edu.itc.shop.domain.Product;
 import edu.itc.shop.domain.ProductRepository;
 import jakarta.inject.Inject;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+import jakarta.ws.rs.BeanParam;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -37,8 +41,8 @@ public class ProductResource {
     }
 
     @GET
-    public List<ProductDto> list() {
-        return repository.findAll().stream()
+    public List<ProductDto> list(@BeanParam @Valid ProductFilter filter) {
+        return filter.filter(repository.findAll()).stream()
                 .map(ProductDto::from)
                 .toList();
     }
@@ -52,7 +56,7 @@ public class ProductResource {
     }
 
     @POST
-    public Response create(ProductDto dto, @Context UriInfo uriInfo) {
+    public Response create(@Valid @NotNull ProductDto dto, @Context UriInfo uriInfo) {
         if (dto.sku != null) {
             repository.findBySku(dto.sku).ifPresent(p -> {
                 throw new DuplicateSkuException(dto.sku);
@@ -69,7 +73,9 @@ public class ProductResource {
 
     @PUT
     @Path("/{id: \\d+}")
-    public ProductDto update(@PathParam("id") long id, ProductDto dto) {
+    public ProductDto update(
+            @PathParam("id") long id,
+            @Valid @NotNull ProductDto dto) {
         Product existing = repository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Product " + id + " not found"));
         if (dto.sku != null) {
@@ -95,7 +101,9 @@ public class ProductResource {
     @PATCH
     @Path("/{id: \\d+}/stock")
     @Consumes(MediaType.APPLICATION_JSON)
-    public ProductDto updateStock(@PathParam("id") long id, StockChange change) {
+    public ProductDto updateStock(
+            @PathParam("id") long id,
+            @Valid @NotNull StockChange change) {
         Product existing = repository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Product " + id + " not found"));
         Product updated = repository.save(existing.adjustStock(change.delta()));

@@ -65,3 +65,12 @@ Or using the Maven wrapper:
 
 ### HTTP Test Evidence (Task 2)
 See [`docs/task2-http.md`](docs/task2-http.md) for the recorded HTTP test commands, headers, and responses.
+
+---
+
+## Task 3: Parameters and Validation
+
+The product list accepts typed price filters, case-insensitive name search, in-stock filtering, and whitelisted sorting. Bean Validation protects product and stock-change inputs, while errors are returned as RFC 9457 `application/problem+json` responses.
+
+### HTTP Test Evidence (Task 3)
+See [`docs/task3-http.md`](docs/task3-http.md) for the HTTP checks and recorded responses.
