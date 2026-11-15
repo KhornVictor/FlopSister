@@ -1,11 +1,12 @@
 # FlopSister — RESTful Web Services
+
 ## Task 1: Product REST API
 This task implements a RESTful API using Jakarta REST (JAX-RS), Jersey, and an embedded Grizzly HTTP server.
 
 ### Base URL
 `http://localhost:8080/api/`
 
-### Available Endpoints
+### Available Endpoints (Task 1)
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/products` | Retrieve all products |
@@ -24,11 +25,43 @@ Jersey uses `AbstractBinder` to bind one `ProductRepository` instance. `ProductR
 ### Stateless Resource Design
 The resource class has no mutable fields because it is stateless and can safely handle multiple HTTP requests without sharing request-specific state.
 
+### HTTP Test Evidence (Task 1)
+See [`docs/task1-http.md`](docs/task1-http.md) for the four HTTP test commands and their actual responses.
+
+---
+
+## Task 2: Full CRUD with Status Codes, Headers, JSON and XML
+
+Task 2 completes the CRUD operations for `/products`, adds content negotiation for JSON and XML via `ProductDto`, and enforces domain business rules.
+
+### Endpoints (Task 2)
+| Method | Endpoint | Request Body | Response Status & Body | Description |
+|---|---|---|---|---|
+| GET | `/products` | — | 200 OK (List of `ProductDto`) | Retrieve all products |
+| GET | `/products/{id}` | — | 200 OK (`ProductDto`) / 404 | Retrieve product by ID |
+| POST | `/products` | `ProductDto` (JSON/XML) | 201 Created + `Location` header / 409 / 415 | Create new product |
+| PUT | `/products/{id}` | `ProductDto` (JSON/XML) | 200 OK (`ProductDto`) / 404 / 409 | Replace product details |
+| DELETE | `/products/{id}` | — | 204 No Content / 404 | Delete product |
+| PATCH | `/products/{id}/stock` | `StockChange` (JSON only) | 200 OK (`ProductDto`) / 404 / 409 | Adjust inventory stock |
+
+### DTO and Representations
+- **`ProductDto`**: JAXB and JSON-B annotated DTO class serving both `application/json` and `application/xml`. The internal entity `version` field is not exposed.
+- **`StockChange`**: Record DTO carrying `delta` for stock adjustment (`application/json` only).
+
+### Business Rules & Error Handling
+- **Duplicate SKU**: If creating a product or updating SKU to an existing SKU, domain throws `DuplicateSkuException` returning `409 Conflict`.
+- **Negative Stock**: If stock adjustment would cause negative stock, `Product.adjustStock` throws `InsufficientStockException` returning `409 Conflict`.
+- **Missing Resource**: `NotFoundException` returns `404 Not Found`.
+- **Unsupported Media Type**: Non-JSON/XML bodies return `415 Unsupported Media Type`.
+
 ### Running the Application
 ```bash
-bash mvnw clean compile
-bash mvnw -Dexec.executable=java -Dexec.args="-classpath target/classes:%classpath edu.itc.shop.Main" exec:exec
+mvn -q compile exec:java
+```
+Or using the Maven wrapper:
+```bash
+./mvnw -q compile exec:java
 ```
 
-### HTTP Test Evidence
-See [`docs/task1-http.md`](docs/task1-http.md) for the four HTTP test commands and their actual responses.
+### HTTP Test Evidence (Task 2)
+See [`docs/task2-http.md`](docs/task2-http.md) for the recorded HTTP test commands, headers, and responses.

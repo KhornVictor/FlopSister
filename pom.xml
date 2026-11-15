@@ -59,6 +59,11 @@
       <artifactId>jersey-media-jaxb</artifactId>              <!-- XML -->
     </dependency>
     <dependency>
+      <groupId>org.glassfish.jaxb</groupId>
+      <artifactId>jaxb-runtime</artifactId>
+      <version>4.0.5</version>
+    </dependency>
+    <dependency>
       <groupId>org.glassfish.jersey.ext</groupId>
       <artifactId>jersey-bean-validation</artifactId>         <!-- Hibernate Validator -->
     </dependency>
@@ -90,7 +95,7 @@
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
         <version>3.5.0</version>
-        <configuration><mainClass>edu.itc.se.shop.ShopApplication</mainClass></configuration>
+        <configuration><mainClass>edu.itc.shop.Main</mainClass></configuration>
       </plugin>
     </plugins>
   </build>
