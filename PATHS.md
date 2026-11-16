@@ -1,6 +1,6 @@
 # Structure of Each Tasks
 
-## Task 0: Project Setup & Baseline Toolchain
+## Task 0: Project Setup & Baseline Toolchain - KHORN VICTOR
 
 Files and directories created during the initial setup:
 
@@ -15,7 +15,7 @@ shop-rest/
     └── test/java/edu/itc/shop/             # Test source root
 ```
 
-## Task 1: First Resource and Server
+## Task 1: First Resource and Server - BE MENGSEANG
 
 Files introduced for embedded Grizzly bootstrap, in-memory repository, and initial product endpoints:
 
@@ -34,7 +34,7 @@ shop-rest/
         └── ProductResource.java            # @Path("/products") resource with GET list and GET {id: \d+}
 ```
 
-## Task 2: Full CRUD with Status Codes, Headers, JSON and XML
+## Task 2: Full CRUD with Status Codes, Headers, JSON and XML - KHORN VICTOR
 
 Files introduced for full CRUD operations, DTO dual JSON/XML representation, and business exceptions:
 
@@ -53,7 +53,7 @@ shop-rest/
             └── StockChange.java            # Record DTO for stock adjustment delta
 ```
 
-## Task 3: Parameters and Validation
+## Task 3: Parameters and Validation - HENG MEYLORNG
 
 Files introduced for query parameter grouping, Money converter, Bean Validation, and RFC 9457 error mappers:
 
@@ -78,7 +78,7 @@ shop-rest/
             └── ProductFilter.java          # @BeanParam for q, minPrice, maxPrice, inStock, sort whitelist
 ```
 
-## Task 4: Providers and Filters
+## Task 4: Providers and Filters - HOUR SAMNANG
 
 Files introduced for cross-cutting filters, authentication, CORS, correlation logging, and gzip compression:
 
@@ -96,7 +96,7 @@ shop-rest/
         └── GzipWriterInterceptor.java      # WriterInterceptor wrapping output stream with GZIPOutputStream
 ```
 
-## Task 5: Pagination, Caching and Versioning
+## Task 5: Pagination, Caching and Versioning - KIM BORAMEY
 
 Files introduced for pagination Link headers, ETag preconditions, v2 vendor media type, and review sub-resource:
 
@@ -121,7 +121,7 @@ shop-rest/
             └── ProductFilter.java          # Added page and size query parameters with Bean Validation
 ```
 
-## Challenge: Orders with HATEOAS, Idempotent POST, OpenAPI and Full Test Suite
+## Challenge: Orders with HATEOAS, Idempotent POST, OpenAPI and Full Test Suite - KHORN VICTOR
 
 Files introduced for orders sub-API, HATEOAS navigation, idempotent retries, OpenAPI 3.1 documentation, and test suite:
 

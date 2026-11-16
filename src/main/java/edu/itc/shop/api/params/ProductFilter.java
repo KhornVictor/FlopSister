@@ -4,6 +4,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
+import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
+
 import edu.itc.shop.domain.Money;
 import edu.itc.shop.domain.Product;
 import jakarta.validation.constraints.AssertTrue;
@@ -15,19 +17,24 @@ import jakarta.ws.rs.QueryParam;
 
 public class ProductFilter {
 
+    @Parameter(description = "Case-insensitive substring search against product name")
     @QueryParam("q")
     public String q;
 
+    @Parameter(description = "Minimum inclusive price formatted as '<amount> EUR'")
     @QueryParam("minPrice")
     public Money minPrice;
 
+    @Parameter(description = "Maximum inclusive price formatted as '<amount> EUR'")
     @QueryParam("maxPrice")
     public Money maxPrice;
 
+    @Parameter(description = "Filter to products with positive stock")
     @QueryParam("inStock")
     @DefaultValue("false")
     public boolean inStock;
 
+    @Parameter(description = "Sort order: name|price|stock followed by ,asc or ,desc")
     @QueryParam("sort")
     @DefaultValue("name,asc")
     @Pattern(
@@ -36,11 +43,13 @@ public class ProductFilter {
             message = "use name,asc|desc, price,asc|desc, or stock,asc|desc")
     public String sort = "name,asc";
 
+    @Parameter(description = "Zero-based page index")
     @QueryParam("page")
     @DefaultValue("0")
     @Min(0)
     public int page;
 
+    @Parameter(description = "Page size between 1 and 100")
     @QueryParam("size")
     @DefaultValue("20")
     @Min(1)

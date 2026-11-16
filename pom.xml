@@ -79,9 +79,15 @@
       <scope>test</scope>
     </dependency>
     <dependency>
-    <groupId>org.glassfish.jersey.core</groupId>
-    <artifactId>jersey-common</artifactId>
-</dependency>
+      <groupId>org.glassfish.jersey.core</groupId>
+      <artifactId>jersey-common</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.microprofile.openapi</groupId>
+      <artifactId>microprofile-openapi-api</artifactId>
+      <version>4.1</version>
+      <scope>provided</scope>
+    </dependency>
   </dependencies>
 
   <build>
@@ -89,6 +95,7 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+        <configuration><mainClass>edu.itc.shop.Main</mainClass></configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -100,6 +107,28 @@
         <artifactId>exec-maven-plugin</artifactId>
         <version>3.5.0</version>
         <configuration><mainClass>edu.itc.shop.Main</mainClass></configuration>
+      </plugin>
+      <plugin>
+        <groupId>io.smallrye</groupId>
+        <artifactId>smallrye-open-api-maven-plugin</artifactId>
+        <version>4.1.0</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>generate-schema</goal>
+            </goals>
+            <phase>process-classes</phase>
+            <configuration>
+              <outputDirectory>${project.build.outputDirectory}/META-INF</outputDirectory>
+              <schemaFilename>openapi</schemaFilename>
+              <openApiVersion>3.1.0</openApiVersion>
+              <outputFileTypeFilter>YAML</outputFileTypeFilter>
+              <infoTitle>shop-rest API</infoTitle>
+              <infoVersion>1.0.0</infoVersion>
+              <scanDependenciesDisable>true</scanDependenciesDisable>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>

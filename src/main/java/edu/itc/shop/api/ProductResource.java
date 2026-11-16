@@ -5,9 +5,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
+import org.eclipse.microprofile.openapi.annotations.Operation;
+import org.eclipse.microprofile.openapi.annotations.enums.ParameterIn;
+import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
+import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
+import org.eclipse.microprofile.openapi.annotations.tags.Tag;
+
 import edu.itc.shop.api.dto.ProductDto;
 import edu.itc.shop.api.dto.ProductV2;
 import edu.itc.shop.api.dto.StockChange;
+import edu.itc.shop.api.filter.Compress;
 import edu.itc.shop.api.params.ProductFilter;
 import edu.itc.shop.domain.DuplicateSkuException;
 import edu.itc.shop.domain.Product;
@@ -41,9 +48,13 @@ import jakarta.ws.rs.core.Request;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
 
+/**
+ * REST resource managing products, stock adjustments, versioning, caching, and reviews sub-resources.
+ */
 @Path("/products")
 @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML})
 @Consumes({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML})
+@Tag(name = "Products", description = "Product catalogue CRUD, filtering, pagination, caching, and versioning")
 public class ProductResource {
 
     private static final String V1_MEDIA_TYPE = "application/vnd.shop.v1+json";
@@ -80,6 +91,12 @@ public class ProductResource {
      * Returns a paginated, filtered, and sorted product page with {@code X-Total-Count} and {@code Link} headers.
      */
     @GET
+    @Compress
+    @Operation(
+            summary = "List products",
+            description = "Filters, sorts, and paginates products with X-Total-Count and Link pagination headers.")
+    @APIResponse(responseCode = "200", description = "Paginated list of products")
+    @APIResponse(responseCode = "400", description = "Invalid filter, sort, or pagination parameter")
     public Response list(
             @BeanParam @Valid ProductFilter filter,
             @Context UriInfo uriInfo) {
@@ -122,7 +139,13 @@ public class ProductResource {
         V1_MEDIA_TYPE,
         MediaType.APPLICATION_XML
     })
+    @Operation(summary = "Get product (v1)", description = "Returns v1 product representation with ETag caching.")
+    @APIResponse(responseCode = "200", description = "Product found")
+    @APIResponse(responseCode = "304", description = "Product unmodified since ETag in If-None-Match")
+    @APIResponse(responseCode = "404", description = "Product not found")
+    @APIResponse(responseCode = "406", description = "Unsupported Accept media type")
     public Response findById(
+            @Parameter(description = "Numeric product ID", required = true)
             @PathParam("id") long id,
             @Context Request request) {
         return cachedProductResponse(id, request, ProductDto::from);
@@ -134,13 +157,25 @@ public class ProductResource {
     @GET
     @Path("/{id: \\d+}")
     @Produces(V2_MEDIA_TYPE)
+    @Operation(summary = "Get product (v2)", description = "Returns v2 product representation with typed Money and availability.")
+    @APIResponse(responseCode = "200", description = "Product v2 representation")
+    @APIResponse(responseCode = "304", description = "Product unmodified since ETag in If-None-Match")
+    @APIResponse(responseCode = "404", description = "Product not found")
+    @APIResponse(responseCode = "406", description = "Unsupported Accept media type")
     public Response findByIdV2(
+            @Parameter(description = "Numeric product ID", required = true)
             @PathParam("id") long id,
             @Context Request request) {
         return cachedProductResponse(id, request, ProductV2::from);
     }
 
     @POST
+    @Operation(summary = "Create product", description = "Creates a new product and returns 201 Created with Location.")
+    @APIResponse(responseCode = "201", description = "Product created")
+    @APIResponse(responseCode = "400", description = "Invalid product payload")
+    @APIResponse(responseCode = "401", description = "Missing or invalid API key")
+    @APIResponse(responseCode = "409", description = "Duplicate SKU")
+    @APIResponse(responseCode = "415", description = "Unsupported Content-Type")
     public Response create(@Valid @NotNull ProductDto dto, @Context UriInfo uriInfo) {
         if (dto.sku != null) {
             repository.findBySku(dto.sku).ifPresent(p -> {
@@ -161,9 +196,24 @@ public class ProductResource {
      */
     @PUT
     @Path("/{id: \\d+}")
+    @Operation(summary = "Replace product", description = "Replaces product details conditionally using If-Match ETag.")
+    @APIResponse(responseCode = "200", description = "Product updated with new ETag")
+    @APIResponse(responseCode = "400", description = "Invalid product payload or malformed If-Match header")
+    @APIResponse(responseCode = "401", description = "Missing or invalid API key")
+    @APIResponse(responseCode = "404", description = "Product not found")
+    @APIResponse(responseCode = "409", description = "Duplicate SKU")
+    @APIResponse(responseCode = "412", description = "ETag precondition failed")
+    @APIResponse(responseCode = "415", description = "Unsupported Content-Type")
+    @APIResponse(responseCode = "428", description = "Missing If-Match header")
     public Response update(
+            @Parameter(description = "Numeric product ID", required = true)
             @PathParam("id") long id,
             @Valid @NotNull ProductDto dto,
+            @Parameter(
+                    name = HttpHeaders.IF_MATCH,
+                    in = ParameterIn.HEADER,
+                    required = true,
+                    description = "Expected current ETag")
             @HeaderParam(HttpHeaders.IF_MATCH) String ifMatch,
             @Context Request request) {
         if (ifMatch == null || ifMatch.isBlank()) {
@@ -195,7 +245,13 @@ public class ProductResource {
 
     @DELETE
     @Path("/{id: \\d+}")
-    public Response delete(@PathParam("id") long id) {
+    @Operation(summary = "Delete product", description = "Deletes a product by ID.")
+    @APIResponse(responseCode = "204", description = "Product deleted")
+    @APIResponse(responseCode = "401", description = "Missing or invalid API key")
+    @APIResponse(responseCode = "404", description = "Product not found")
+    public Response delete(
+            @Parameter(description = "Numeric product ID", required = true)
+            @PathParam("id") long id) {
         if (!repository.delete(id)) {
             throw new NotFoundException("Product " + id + " not found");
         }
@@ -205,7 +261,15 @@ public class ProductResource {
     @PATCH
     @Path("/{id: \\d+}/stock")
     @Consumes(MediaType.APPLICATION_JSON)
+    @Operation(summary = "Adjust product stock", description = "Adjusts product stock by delta without dropping below zero.")
+    @APIResponse(responseCode = "200", description = "Stock adjusted")
+    @APIResponse(responseCode = "400", description = "Invalid stock delta")
+    @APIResponse(responseCode = "401", description = "Missing or invalid API key")
+    @APIResponse(responseCode = "404", description = "Product not found")
+    @APIResponse(responseCode = "409", description = "Insufficient stock")
+    @APIResponse(responseCode = "415", description = "Unsupported Content-Type")
     public ProductDto updateStock(
+            @Parameter(description = "Numeric product ID", required = true)
             @PathParam("id") long id,
             @Valid @NotNull StockChange change) {
         Product existing = requireProduct(id);
@@ -217,7 +281,9 @@ public class ProductResource {
      * Sub-resource locator delegating {@code /products/{id}/reviews} to {@link ReviewResource}.
      */
     @Path("/{id: \\d+}/reviews")
-    public ReviewResource reviews(@PathParam("id") long id) {
+    public ReviewResource reviews(
+            @Parameter(description = "Numeric product ID", required = true)
+            @PathParam("id") long id) {
         return new ReviewResource(requireProduct(id), reviewRepository);
     }
 
@@ -262,5 +328,4 @@ public class ProductResource {
                 .rel(rel)
                 .build();
     }
-
 }

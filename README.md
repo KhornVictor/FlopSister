@@ -1,145 +1,207 @@
-# FlopSister — RESTful Web Services
+# FlopSister (`shop-rest`) — Lab 04: RESTful Web Services (Jakarta REST / JAX-RS)
 
-## Task 1: Product REST API
-This task implements a RESTful API using Jakarta REST (JAX-RS), Jersey, and an embedded Grizzly HTTP server.
-
-### Base URL
-`http://localhost:8080/api/`
-
-### Available Endpoints (Task 1)
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/products` | Retrieve all products |
-| GET | `/products/{id}` | Retrieve a product by ID |
-
-### Product Repository
-The application uses an `InMemoryProductRepository` backed by `ConcurrentHashMap` and `AtomicLong`.
-Three products are seeded when the repository is created:
-- Kettle (KT-01)
-- Mug (MG-01)
-- Tea (TE-01)
-
-### Dependency Injection
-Jersey uses `AbstractBinder` to bind one `ProductRepository` instance. `ProductResource` receives the repository through constructor injection.
-
-### Stateless Resource Design
-The resource class has no mutable fields because it is stateless and can safely handle multiple HTTP requests without sharing request-specific state.
-
-### HTTP Test Evidence (Task 1)
-See [`docs/task1-http.md`](docs/task1-http.md) for the four HTTP test commands and their actual responses.
+A RESTful e-commerce catalogue and orders API built with **Jakarta REST 4.0 (Eclipse Jersey 4)** on an embedded **Grizzly** HTTP server using **JDK 25** and **Maven**.
 
 ---
 
-## Task 2: Full CRUD with Status Codes, Headers, JSON and XML
+## Contributors & Project Information
 
-Task 2 completes the CRUD operations for `/products`, adds content negotiation for JSON and XML via `ProductDto`, and enforces domain business rules.
+- **Institution:** Institute of Technology of Cambodia (ITC)
+- **Department:** Information and Communication Engineering (GIC)
+- **Class / Academic Year:** I4-GIC-A · Semester 1
+- **Course:** Software Engineering — Lab 04: RESTful Web Services (JAX-RS)
+- **Project Repository:** [`https://github.com/KhornVictor/FlopSister`](https://github.com/KhornVictor/FlopSister)
 
-### Endpoints (Task 2)
-| Method | Endpoint | Request Body | Response Status & Body | Description |
-|---|---|---|---|---|
-| GET | `/products` | — | 200 OK (List of `ProductDto`) | Retrieve all products |
-| GET | `/products/{id}` | — | 200 OK (`ProductDto`) / 404 | Retrieve product by ID |
-| POST | `/products` | `ProductDto` (JSON/XML) | 201 Created + `Location` header / 409 / 415 | Create new product |
-| PUT | `/products/{id}` | `ProductDto` (JSON/XML) | 200 OK (`ProductDto`) / 404 / 409 | Replace product details |
-| DELETE | `/products/{id}` | — | 204 No Content / 404 | Delete product |
-| PATCH | `/products/{id}/stock` | `StockChange` (JSON only) | 200 OK (`ProductDto`) / 404 / 409 | Adjust inventory stock |
+### Group Members & Contributors
 
-### DTO and Representations
-- **`ProductDto`**: JAXB and JSON-B annotated DTO class serving both `application/json` and `application/xml`. The internal entity `version` field is not exposed.
-- **`StockChange`**: Record DTO carrying `delta` for stock adjustment (`application/json` only).
+| Name | Student ID | Task |
+|---|---|---|
+| BE Mengseang | `e20230455` | Task 1 |
+| KHORN Victor | `e20230078` | Task 0, Task 2, Challenge |
+| MEY Lorngheng | `e20230260` | Task 3 |
+| HOUR Samnang | `e20230372` | Task 4 |
+| KIM Boramey | `e20231250` | Task 5 |
 
-### Business Rules & Error Handling
-- **Duplicate SKU**: If creating a product or updating SKU to an existing SKU, domain throws `DuplicateSkuException` returning `409 Conflict`.
-- **Negative Stock**: If stock adjustment would cause negative stock, `Product.adjustStock` throws `InsufficientStockException` returning `409 Conflict`.
-- **Missing Resource**: `NotFoundException` returns `404 Not Found`.
-- **Unsupported Media Type**: Non-JSON/XML bodies return `415 Unsupported Media Type`.
+---
 
-### Running the Application
+## Implemented Scope
+
+- **Task 1 — First Resource & Server:** Embedded Grizzly bootstrap (`edu.itc.shop.Main`), HK2 singleton `AbstractBinder` DI, thread-safe `InMemoryProductRepository`, stateless `ProductResource`, and `GET /products` + `GET /products/{id: \d+}` (`404` on unknown or non-numeric IDs).
+- **Task 2 — Full CRUD, JSON & XML:** Dual JSON (JSON-B/Yasson) and XML (JAXB) representations via `ProductDto` (hiding internal `version`), `POST` (`201` + `Location` via `UriInfo`), `PUT` (`200`/`404`), `DELETE` (`204`/`404`), `PATCH /{id}/stock` (`200`/`409`), and domain exceptions `DuplicateSkuException` / `InsufficientStockException`.
+- **Task 3 — Parameters & Validation:** `Money` domain value object with `MoneyConverterProvider` (`ParamConverterProvider`), `@BeanParam @Valid ProductFilter` (`q`, `minPrice`, `maxPrice`, `inStock`, whitelisted `sort`), Bean Validation on DTOs/query params, and RFC 9457 `application/problem+json` via `ValidationMapper` (`400`) and `ProblemMapper` (`404`, `409`, `415`, `500` with UUID reference).
+- **Task 4 — Providers & Filters:** `CorrelationFilter` (`X-Correlation-Id` propagation/generation + access logging with duration), `CorsFilter` (`@PreMatching` `OPTIONS` preflight + CORS headers), `ApiKeyFilter` (`@PreMatching`, `@Priority(Priorities.AUTHENTICATION)`, `shop.api.keys` defaulting to `demo-123`, `401` `problem+json` + `WWW-Authenticate`), and selective `@Compress` `@NameBinding` with `GzipWriterInterceptor`.
+- **Task 5 — Pagination, Caching, Versioning & Reviews:** `page`/`size` pagination with `X-Total-Count` and RFC 8288 `Link` headers (`first`, `prev`, `next`, `last`), `ETag`/`Cache-Control` with `304 Not Modified` and conditional `PUT` (`428`/`412`/`200`), media-type versioning (`application/vnd.shop.v2+json` via `ProductV2` while preserving v1 default), and `/products/{id}/reviews` sub-resource locator (`ReviewResource`, `ReviewRepository`, `InMemoryReviewRepository`).
+- **Challenge — Orders, HATEOAS, Idempotency, OpenAPI & Full Test Suite:**
+  - Orders sub-API (`OrderResource`, `OrderService`, `InMemoryOrderRepository`, `Order`, `Line`, `OrderStatus`) supporting atomic stock reservation, `NEW -> PAID`, and `NEW -> CANCELLED` (with stock restoration).
+  - HATEOAS `Link` headers and `_links` maps (`self`, conditional `pay`/`cancel` while `NEW`, and `product-<id>` links).
+  - Race-free idempotent `POST /orders` backed by a bound singleton `ConcurrentMap` (`computeIfAbsent`) and SHA-256 payload hashing (`Hashes`), returning `Idempotency-Replayed: true|false`, `428` when missing `Idempotency-Key`, and `422` on body mismatch.
+  - Build-time OpenAPI 3.1 schema generation (`smallrye-open-api-maven-plugin` -> `target/classes/META-INF/openapi.yaml`) served at `GET /api/openapi` (`application/yaml`) via `OpenApiResource`.
+  - Integration test suites in `ShopApiTest` (13+ HTTP status codes + HATEOAS + concurrency + OpenAPI + gzip), `Task3ApiTest`, and `Task5ApiTest`.
+
+---
+
+## Stateless Resource Design
+
+Resource classes (`ProductResource`, `ReviewResource`, `OrderResource`, `OpenApiResource`) hold no mutable per-request fields—only references to thread-safe singleton repositories/services injected via constructor—so concurrent HTTP requests never share request-specific state.
+
+---
+
+## How to Build, Test, and Run
+
+### Run the Full Verification Suite
+
 ```bash
-mvn -q compile exec:java
+./mvnw -q verify
 ```
-Or using the Maven wrapper:
+
+On Windows PowerShell:
+
+```powershell
+.\mvnw.cmd -q verify
+```
+
+`mvn verify` compiles the classes, runs `smallrye-open-api-maven-plugin:generate-schema` during `process-classes` to write `target/classes/META-INF/openapi.yaml`, and executes all JUnit / `JerseyTest` suites (`ShopApiTest`, `Task3ApiTest`, `Task5ApiTest`, `ShopApplicationTests`).
+
+### Start the Server
+
 ```bash
 ./mvnw -q compile exec:java
 ```
 
-### HTTP Test Evidence (Task 2)
-See [`docs/task2-http.md`](docs/task2-http.md) for the recorded HTTP test commands, headers, and responses.
+On Windows PowerShell:
+
+```powershell
+.\mvnw.cmd -q compile exec:java
+```
+
+The server listens on **`http://localhost:8080/api/`**.  
+Write endpoints (`POST`, `PUT`, `PATCH`, `DELETE`) require header `X-Api-Key: demo-123` (configurable via `-Dshop.api.keys=key1,key2`).
 
 ---
 
-## Task 3: Parameters and Validation
+## API Endpoints Summary
 
-The product list accepts typed price filters, case-insensitive name search, in-stock filtering, and whitelisted sorting. Bean Validation protects product and stock-change inputs, while errors are returned as RFC 9457 `application/problem+json` responses.
+| Method | Path | Purpose | Key Headers / Status Codes |
+|---|---|---|---|
+| `GET` | `/products` | Filter, sort, paginate products (`@Compress`) | `200`, `400`; `X-Total-Count`, `Link`, `Content-Encoding: gzip` |
+| `GET` | `/products/{id}` | Retrieve product (`v1` JSON/XML or `v2` JSON) | `200`, `304`, `404`, `406`; `ETag`, `Cache-Control` |
+| `POST` | `/products` | Create product (`JSON` or `XML`) | `201` (`Location`), `400`, `401`, `409`, `415` |
+| `PUT` | `/products/{id}` | Replace product conditionally | `200` (`ETag`), `400`, `401`, `404`, `409`, `412`, `415`, `428` |
+| `PATCH` | `/products/{id}/stock` | Adjust stock delta (`JSON`) | `200`, `400`, `401`, `404`, `409`, `415` |
+| `DELETE` | `/products/{id}` | Delete product | `204`, `401`, `404` |
+| `GET` | `/products/{id}/reviews` | List reviews for product | `200`, `404`, `406` |
+| `POST` | `/products/{id}/reviews` | Create product review | `201` (`Location`), `400`, `401`, `404`, `415` |
+| `POST` | `/orders` | Idempotent order creation | `201` (`Location`, `Idempotency-Replayed`), `400`, `401`, `404`, `409`, `415`, `422`, `428` |
+| `GET` | `/orders/{id}` | Retrieve order + HATEOAS links | `200`, `404`, `406`; `Link`, `_links` |
+| `PUT` | `/orders/{id}/payment` | Pay `NEW` order (`NEW -> PAID`) | `200`, `401`, `404`, `409` |
+| `DELETE` | `/orders/{id}` | Cancel `NEW` order (`NEW -> CANCELLED`) | `200`, `401`, `404`, `409` |
+| `GET` | `/openapi` | Serve generated OpenAPI 3.1 YAML | `200` (`application/yaml`), `404` |
 
-### HTTP Test Evidence (Task 3)
-See [`docs/task3-http.md`](docs/task3-http.md) for the HTTP checks and recorded responses.
+### HTTP Transcripts
 
----
-
-## Task 4: Providers and Filters
-
-Task 4 adds cross-cutting HTTP features using Jakarta REST (JAX-RS) providers and filters. These features include correlation IDs, CORS handling, API key authentication, and GZIP response compression.
-
-### Correlation ID Filter
-
-- Generates a unique UUID for each incoming request.
-- Adds the ID to the response using the `X-Correlation-Id` header.
-- Logs the correlation ID, HTTP method, request URI, and response status.
-- Allows requests to be traced through server logs.
-
-### CORS Filter
-
-- Allows requests from `http://localhost:5173`.
-- Supports `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, and `OPTIONS`.
-- Allows the `Content-Type` and `X-Api-Key` request headers.
-- Exposes the `X-Correlation-Id` response header.
-- Handles `OPTIONS` preflight requests.
-
-### API Key Authentication Filter
-
-- Uses the `X-Api-Key` request header for authentication.
-- Requires a valid API key for write operations (`POST`, `PUT`, `PATCH`, and `DELETE`).
-- Allows public read operations (`GET`, `HEAD`, and `OPTIONS`) without an API key.
-- Returns `401 Unauthorized` when the API key is missing or invalid.
-
-**Development API key:** `demo-123` (updated in Task 5 from `dev-secret-key`)
-
-### GZIP Compression
-
-- Registers Jersey's `EncodingFilter` and `GZipEncoder`.
-- Compresses responses when the client sends `Accept-Encoding: gzip`.
-- Uses the `Content-Encoding: gzip` response header to indicate compression.
-- Includes `Vary: Accept-Encoding` so responses can be cached correctly based on the requested encoding.
-
-### HTTP Test Evidence (Task 4)
-
-See [`docs/task4-http.md`](docs/task4-http.md) for the HTTP test commands, expected results, and recorded responses.
+- Task 1: [`docs/task1-http.md`](docs/task1-http.md)
+- Task 2: [`docs/task2-http.md`](docs/task2-http.md)
+- Task 3: [`docs/task3-http.md`](docs/task3-http.md)
+- Task 4: [`docs/task4-http.md`](docs/task4-http.md)
+- Task 5: [`docs/task5-http.md`](docs/task5-http.md)
+- Challenge: [`docs/challenge-http.md`](docs/challenge-http.md)
 
 ---
 
-## Task 5: Pagination, Caching, Versioning, and Reviews
+## JAX-RS vs Spring MVC
 
-Task 5 extends `/products` for scalability, HTTP caching, media-type versioning, and nested review resources:
+### Side-by-Side Comparison (`GET /products/{id}` and `POST /products`)
 
-### Pagination
-- `ProductFilter` adds validated `page` (`@DefaultValue("0") @Min(0)`) and `size` (`@DefaultValue("20") @Min(1) @Max(100)`) query parameters.
-- `InMemoryProductRepository` seeds 30 additional products (`33` total) so pagination spans multiple pages.
-- `GET /products` returns the page slice alongside `X-Total-Count` (filtered total) and `Link` headers (`first`, `prev` when `page > 0`, `next` when `page < lastPage`, and `last`).
+#### Jakarta REST 4.0 (JAX-RS / Jersey — This Lab)
 
-### Caching and Optimistic Concurrency (`ETag`)
-- `GET /products/{id}` computes an `EntityTag` from `Product.version()`, returns `304 Not Modified` via `Request.evaluatePreconditions(tag)` on a matching `If-None-Match`, and otherwise sets `Cache-Control: private, no-transform, max-age=60`.
-- `PUT /products/{id}` requires `If-Match` (`428 Precondition Required` as `application/problem+json` when missing), returns `412 Precondition Failed` on a stale tag, and returns `200 OK` with the updated `ETag` when matched.
-- `PATCH /products/{id}/stock` continues to operate without preconditions.
+```java
+@Path("/products")
+@Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML})
+@Consumes({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML})
+public class ProductResource {
 
-### Versioning by Media Type
-- `ProductV2` exposes `(id, name, sku, price: Money, stock, available)` via `@Produces("application/vnd.shop.v2+json")`.
-- Existing v1 representations are advertised as `"application/json; qs=1.0"`, `"application/vnd.shop.v1+json"`, and `"application/xml"` so plain JSON clients remain on v1.
+    private final ProductRepository repository;
 
-### Reviews Sub-Resource
-- `Review(id, productId, stars, author, text)` is stored in `InMemoryReviewRepository` bound as a singleton `ReviewRepository` in `Main.config()`.
-- `ProductResource` exposes `@Path("/{id: \\d+}/reviews")` returning `ReviewResource`, which provides `GET` (list) and validated `POST` (`@Min(1) @Max(5) stars`, `@NotBlank author`, `@Size(max = 500) text` returning `201 Created` + `Location`), and `404 Not Found` when the product does not exist.
+    @Inject
+    public ProductResource(ProductRepository repository) {
+        this.repository = repository;
+    }
 
-### HTTP Test Evidence (Task 5)
+    @GET
+    @Path("/{id: \\d+}")
+    public Response findById(@PathParam("id") long id, @Context Request request) {
+        Product product = repository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Product " + id + " not found"));
+        EntityTag tag = new EntityTag(Integer.toHexString(product.version()));
+        Response.ResponseBuilder cond = request.evaluatePreconditions(tag);
+        if (cond != null) {
+            return cond.tag(tag).build();
+        }
+        return Response.ok(ProductDto.from(product)).tag(tag).build();
+    }
 
-See [`docs/task5-http.md`](docs/task5-http.md) for all recorded curl commands and actual server responses.
+    @POST
+    public Response create(@Valid @NotNull ProductDto dto, @Context UriInfo uriInfo) {
+        repository.findBySku(dto.sku).ifPresent(p -> {
+            throw new DuplicateSkuException(dto.sku);
+        });
+        Product saved = repository.save(dto.toProduct(0, 0));
+        URI location = uriInfo.getAbsolutePathBuilder()
+                .path(Long.toString(saved.id()))
+                .build();
+        return Response.created(location).entity(ProductDto.from(saved)).build();
+    }
+}
+```
+
+#### Spring MVC (Lab 02 Style)
+
+```java
+@RestController
+@RequestMapping("/api/products")
+public class ProductController {
+
+    private final ProductRepository repository;
+
+    public ProductController(ProductRepository repository) {
+        this.repository = repository;
+    }
+
+    @GetMapping("/{id:\\d+}")
+    public ResponseEntity<ProductDto> findById(@PathVariable long id, WebRequest request) {
+        Product product = repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Product " + id + " not found"));
+        String etag = Integer.toHexString(product.version());
+        if (request.checkNotModified(etag)) {
+            return ResponseEntity.status(HttpStatus.NOT_MODIFIED).eTag(etag).build();
+        }
+        return ResponseEntity.ok().eTag(etag).body(ProductDto.from(product));
+    }
+
+    @PostMapping
+    public ResponseEntity<ProductDto> create(
+            @Valid @RequestBody ProductDto dto,
+            UriComponentsBuilder uriBuilder) {
+        repository.findBySku(dto.sku).ifPresent(p -> {
+            throw new DuplicateSkuException(dto.sku);
+        });
+        Product saved = repository.save(dto.toProduct(0, 0));
+        URI location = uriBuilder.path("/api/products/{id}").buildAndExpand(saved.id()).toUri();
+        return ResponseEntity.created(location).body(ProductDto.from(saved));
+    }
+}
+```
+
+### Eight Key Differences
+
+| Aspect | Jakarta REST (JAX-RS / Jersey) | Spring MVC |
+|---|---|---|
+| **1. Annotations** | Standard `jakarta.ws.rs.*` (`@Path`, `@GET`, `@POST`, `@Produces`, `@Consumes`, `@PathParam`, `@BeanParam`) | Spring-specific (`@RestController`, `@RequestMapping`, `@GetMapping`, `@PostMapping`, `@PathVariable`) |
+| **2. Body binding** | Any single unannotated method parameter (e.g., `@Valid @NotNull ProductDto dto`) is bound as the request entity by `MessageBodyReader` | Explicit `@RequestBody` annotation is required on the parameter for `HttpMessageConverter` binding |
+| **3. Response building** | `jakarta.ws.rs.core.Response` fluent builder (`Response.created(uri).entity(body).tag(etag).links(...).build()`) | `org.springframework.http.ResponseEntity<T>` (`ResponseEntity.created(uri).eTag(etag).body(body)`) |
+| **4. Errors** | `ExceptionMapper<T>` `@Provider` classes (e.g., `ProblemMapper`, `ValidationMapper`) plus `WebApplicationException` hierarchy | `@RestControllerAdvice` / `@ExceptionHandler` methods (or Spring's `ProblemDetail` / `ResponseEntityExceptionHandler`) |
+| **5. Filters** | `ContainerRequestFilter` (with `@PreMatching` & `@Priority`), `ContainerResponseFilter`, and `@NameBinding` `WriterInterceptor` | Servlet `Filter` / `OncePerRequestFilter`, `HandlerInterceptor`, and `ResponseBodyAdvice` |
+| **6. JSON library** | Jakarta JSON-B (`Yasson` via `jersey-media-json-binding`) by default, alongside JAXB for XML | Jackson (`jackson-databind`) by default via `MappingJackson2HttpMessageConverter` |
+| **7. DI** | HK2 (`AbstractBinder` in `ResourceConfig`, `@Inject` from `jakarta.inject`) or CDI in Jakarta EE runtimes | Spring IoC ApplicationContext (`@Component`, `@Service`, `@Bean`, automatic constructor injection) |
+| **8. Testing** | `JerseyTest` extending JUnit with `configure()` starting an embedded Grizzly test container and JAX-RS `Client` | `@WebMvcTest` with `MockMvc` (mocked servlet layer) or `@SpringBootTest` with `TestRestTemplate` / `WebTestClient` |

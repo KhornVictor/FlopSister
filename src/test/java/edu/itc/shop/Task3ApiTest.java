@@ -70,6 +70,7 @@ class Task3ApiTest extends JerseyTest {
 
         try (Response response = target("products")
                 .request()
+                .header("X-Api-Key", "demo-123")
                 .post(jakarta.ws.rs.client.Entity.entity(
                         "{\"name\":\"\",\"sku\":\"kettle\",\"price\":0,\"stock\":-1}",
                         MediaType.APPLICATION_JSON))) {
@@ -105,6 +106,7 @@ class Task3ApiTest extends JerseyTest {
 
         try (Response response = target("products")
                 .request()
+                .header("X-Api-Key", "demo-123")
                 .post(jakarta.ws.rs.client.Entity.entity(
                         "Tea", MediaType.TEXT_PLAIN))) {
             assertProblem(response, 415);
@@ -112,6 +114,7 @@ class Task3ApiTest extends JerseyTest {
 
         try (Response response = target("products")
                 .request()
+                .header("X-Api-Key", "demo-123")
                 .post(jakarta.ws.rs.client.Entity.entity(
                         "{\"name\":\"Duplicate\",\"sku\":\"KT-01\",\"price\":1,\"stock\":1}",
                         MediaType.APPLICATION_JSON))) {
