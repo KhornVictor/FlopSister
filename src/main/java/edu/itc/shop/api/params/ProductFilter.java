@@ -7,6 +7,8 @@ import java.util.Locale;
 import edu.itc.shop.domain.Money;
 import edu.itc.shop.domain.Product;
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.QueryParam;
@@ -15,6 +17,16 @@ public class ProductFilter {
 
     @QueryParam("q")
     public String q;
+    @QueryParam("page")
+@DefaultValue("0")
+@Min(0)
+public int page;
+
+@QueryParam("size")
+@DefaultValue("20")
+@Min(1)
+@Max(100)
+public int size;
 
     @QueryParam("minPrice")
     public Money minPrice;
