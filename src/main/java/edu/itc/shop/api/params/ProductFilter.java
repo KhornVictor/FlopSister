@@ -46,6 +46,17 @@ public int size;
             message = "use name,asc|desc, price,asc|desc, or stock,asc|desc")
     public String sort;
 
+    @QueryParam("page")
+    @DefaultValue("0")
+    @Min(0)
+    public int page;
+
+    @QueryParam("size")
+    @DefaultValue("20")
+    @Min(1)
+    @Max(100)
+    public int size = 20;
+
     @AssertTrue(message = "minPrice and maxPrice currency must be EUR")
     public boolean isCurrencySupported() {
         return (minPrice == null || "EUR".equals(minPrice.currency()))

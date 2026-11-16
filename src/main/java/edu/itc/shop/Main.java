@@ -9,6 +9,7 @@ import org.glassfish.jersey.grizzly2.httpserver.GrizzlyHttpServerFactory;
 import org.glassfish.jersey.server.ResourceConfig;
 
 import edu.itc.shop.domain.InMemoryProductRepository;
+import edu.itc.shop.domain.InMemoryReviewRepository;
 import edu.itc.shop.domain.ProductRepository;
 import edu.itc.shop.domain.ReviewRepository;
 

@@ -1,7 +1,9 @@
 package edu.itc.shop.api;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 
 import edu.itc.shop.api.dto.ProductDto;
 import edu.itc.shop.api.dto.ProductV2;
@@ -14,7 +16,9 @@ import edu.itc.shop.domain.ReviewRepository;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.BeanParam;
+import jakarta.ws.rs.ClientErrorException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -38,6 +42,25 @@ import jakarta.ws.rs.core.UriInfo;
 @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML})
 @Consumes({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML})
 public class ProductResource {
+
+    private static final String V1_MEDIA_TYPE = "application/vnd.shop.v1+json";
+    private static final String V2_MEDIA_TYPE = "application/vnd.shop.v2+json";
+    private static final Response.StatusType PRECONDITION_REQUIRED = new Response.StatusType() {
+        @Override
+        public int getStatusCode() {
+            return 428;
+        }
+
+        @Override
+        public Response.Status.Family getFamily() {
+            return Response.Status.Family.CLIENT_ERROR;
+        }
+
+        @Override
+        public String getReasonPhrase() {
+            return "Precondition Required";
+        }
+    };
 
     private final ProductRepository repository;
     private final ReviewRepository reviewRepository;
@@ -219,8 +242,7 @@ public Response update(
     public ProductDto updateStock(
             @PathParam("id") long id,
             @Valid @NotNull StockChange change) {
-        Product existing = repository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Product " + id + " not found"));
+        Product existing = requireProduct(id);
         Product updated = repository.save(existing.adjustStock(change.delta()));
         return ProductDto.from(updated);
     }
