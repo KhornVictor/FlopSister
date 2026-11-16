@@ -74,3 +74,44 @@ The product list accepts typed price filters, case-insensitive name search, in-s
 
 ### HTTP Test Evidence (Task 3)
 See [`docs/task3-http.md`](docs/task3-http.md) for the HTTP checks and recorded responses.
+
+---
+
+## Task 4: Providers and Filters
+
+Task 4 adds cross-cutting HTTP features using Jakarta REST (JAX-RS) providers and filters. These features include correlation IDs, CORS handling, API key authentication, and GZIP response compression.
+
+### Correlation ID Filter
+
+- Generates a unique UUID for each incoming request.
+- Adds the ID to the response using the `X-Correlation-Id` header.
+- Logs the correlation ID, HTTP method, request URI, and response status.
+- Allows requests to be traced through server logs.
+
+### CORS Filter
+
+- Allows requests from `http://localhost:5173`.
+- Supports `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, and `OPTIONS`.
+- Allows the `Content-Type` and `X-Api-Key` request headers.
+- Exposes the `X-Correlation-Id` response header.
+- Handles `OPTIONS` preflight requests.
+
+### API Key Authentication Filter
+
+- Uses the `X-Api-Key` request header for authentication.
+- Requires a valid API key for write operations (`POST`, `PUT`, `PATCH`, and `DELETE`).
+- Allows public read operations (`GET`, `HEAD`, and `OPTIONS`) without an API key.
+- Returns `401 Unauthorized` when the API key is missing or invalid.
+
+**Development API key:** `dev-secret-key`
+
+### GZIP Compression
+
+- Registers Jersey's `EncodingFilter` and `GZipEncoder`.
+- Compresses responses when the client sends `Accept-Encoding: gzip`.
+- Uses the `Content-Encoding: gzip` response header to indicate compression.
+- Includes `Vary: Accept-Encoding` so responses can be cached correctly based on the requested encoding.
+
+### HTTP Test Evidence (Task 4)
+
+See [`docs/task4-http.md`](docs/task4-http.md) for the HTTP test commands, expected results, and recorded responses.

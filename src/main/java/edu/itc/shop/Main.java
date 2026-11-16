@@ -1,3 +1,4 @@
+
 package edu.itc.shop;
 
 import java.net.URI;
@@ -28,7 +29,9 @@ public class Main {
                         bind(repository)
                                 .to(ProductRepository.class);
                     }
-                });
+                })
+                .register(org.glassfish.jersey.server.filter.EncodingFilter.class)
+                .register(org.glassfish.jersey.message.GZipEncoder.class);
     }
 
     public static HttpServer startServer() {
