@@ -7,6 +7,8 @@ import java.util.Locale;
 import edu.itc.shop.domain.Money;
 import edu.itc.shop.domain.Product;
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.QueryParam;
@@ -33,6 +35,17 @@ public class ProductFilter {
             flags = Pattern.Flag.CASE_INSENSITIVE,
             message = "use name,asc|desc, price,asc|desc, or stock,asc|desc")
     public String sort;
+
+    @QueryParam("page")
+    @DefaultValue("0")
+    @Min(0)
+    public int page;
+
+    @QueryParam("size")
+    @DefaultValue("20")
+    @Min(1)
+    @Max(100)
+    public int size = 20;
 
     @AssertTrue(message = "minPrice and maxPrice currency must be EUR")
     public boolean isCurrencySupported() {

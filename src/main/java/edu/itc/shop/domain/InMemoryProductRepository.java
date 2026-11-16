@@ -23,6 +23,17 @@ public class InMemoryProductRepository implements ProductRepository {
 
         save(new Product(0, "Tea", "TE-01",
                 new BigDecimal("4.20"), 0, 0));
+
+        // Seed 30 additional items (< 5.00 EUR so Task 3 price/name filters stay unaffected)
+        for (int i = 1; i <= 30; i++) {
+            save(new Product(
+                    0,
+                    String.format("Sample %02d", i),
+                    String.format("SP-%02d", i),
+                    BigDecimal.valueOf(100L + i * 10L, 2),
+                    (i % 5) * 3,
+                    0));
+        }
     }
 
     @Override

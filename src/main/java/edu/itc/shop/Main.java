@@ -9,7 +9,9 @@ import org.glassfish.jersey.grizzly2.httpserver.GrizzlyHttpServerFactory;
 import org.glassfish.jersey.server.ResourceConfig;
 
 import edu.itc.shop.domain.InMemoryProductRepository;
+import edu.itc.shop.domain.InMemoryReviewRepository;
 import edu.itc.shop.domain.ProductRepository;
+import edu.itc.shop.domain.ReviewRepository;
 
 public class Main {
 
@@ -20,6 +22,8 @@ public class Main {
 
         ProductRepository repository =
                 new InMemoryProductRepository();
+        ReviewRepository reviewRepository =
+                new InMemoryReviewRepository();
 
         return new ResourceConfig()
                 .packages("edu.itc.shop.api")
@@ -28,6 +32,8 @@ public class Main {
                     protected void configure() {
                         bind(repository)
                                 .to(ProductRepository.class);
+                        bind(reviewRepository)
+                                .to(ReviewRepository.class);
                     }
                 })
                 .register(org.glassfish.jersey.server.filter.EncodingFilter.class)

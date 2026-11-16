@@ -20,7 +20,7 @@ public class ApiKeyFilter implements ContainerRequestFilter {
     private static final String API_KEY_HEADER = "X-Api-Key";
 
     // Development key for this lab
-    private static final String EXPECTED_API_KEY = "dev-secret-key";
+    private static final String EXPECTED_API_KEY = "demo-123";
 
     @Override
     public void filter(ContainerRequestContext request)

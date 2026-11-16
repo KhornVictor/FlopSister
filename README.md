@@ -103,7 +103,7 @@ Task 4 adds cross-cutting HTTP features using Jakarta REST (JAX-RS) providers an
 - Allows public read operations (`GET`, `HEAD`, and `OPTIONS`) without an API key.
 - Returns `401 Unauthorized` when the API key is missing or invalid.
 
-**Development API key:** `dev-secret-key`
+**Development API key:** `demo-123` (updated in Task 5 from `dev-secret-key`)
 
 ### GZIP Compression
 
@@ -115,3 +115,31 @@ Task 4 adds cross-cutting HTTP features using Jakarta REST (JAX-RS) providers an
 ### HTTP Test Evidence (Task 4)
 
 See [`docs/task4-http.md`](docs/task4-http.md) for the HTTP test commands, expected results, and recorded responses.
+
+---
+
+## Task 5: Pagination, Caching, Versioning, and Reviews
+
+Task 5 extends `/products` for scalability, HTTP caching, media-type versioning, and nested review resources:
+
+### Pagination
+- `ProductFilter` adds validated `page` (`@DefaultValue("0") @Min(0)`) and `size` (`@DefaultValue("20") @Min(1) @Max(100)`) query parameters.
+- `InMemoryProductRepository` seeds 30 additional products (`33` total) so pagination spans multiple pages.
+- `GET /products` returns the page slice alongside `X-Total-Count` (filtered total) and `Link` headers (`first`, `prev` when `page > 0`, `next` when `page < lastPage`, and `last`).
+
+### Caching and Optimistic Concurrency (`ETag`)
+- `GET /products/{id}` computes an `EntityTag` from `Product.version()`, returns `304 Not Modified` via `Request.evaluatePreconditions(tag)` on a matching `If-None-Match`, and otherwise sets `Cache-Control: private, no-transform, max-age=60`.
+- `PUT /products/{id}` requires `If-Match` (`428 Precondition Required` as `application/problem+json` when missing), returns `412 Precondition Failed` on a stale tag, and returns `200 OK` with the updated `ETag` when matched.
+- `PATCH /products/{id}/stock` continues to operate without preconditions.
+
+### Versioning by Media Type
+- `ProductV2` exposes `(id, name, sku, price: Money, stock, available)` via `@Produces("application/vnd.shop.v2+json")`.
+- Existing v1 representations are advertised as `"application/json; qs=1.0"`, `"application/vnd.shop.v1+json"`, and `"application/xml"` so plain JSON clients remain on v1.
+
+### Reviews Sub-Resource
+- `Review(id, productId, stars, author, text)` is stored in `InMemoryReviewRepository` bound as a singleton `ReviewRepository` in `Main.config()`.
+- `ProductResource` exposes `@Path("/{id: \\d+}/reviews")` returning `ReviewResource`, which provides `GET` (list) and validated `POST` (`@Min(1) @Max(5) stars`, `@NotBlank author`, `@Size(max = 500) text` returning `201 Created` + `Location`), and `404 Not Found` when the product does not exist.
+
+### HTTP Test Evidence (Task 5)
+
+See [`docs/task5-http.md`](docs/task5-http.md) for all recorded curl commands and actual server responses.
