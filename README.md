@@ -18,7 +18,7 @@ A RESTful e-commerce catalogue and orders API built with **Jakarta REST 4.0 (Ecl
 |---|---|---|
 | BE Mengseang | `e20230455` | Task 1 |
 | KHORN Victor | `e20230078` | Task 0, Task 2, Challenge |
-| MEY Lorngheng | `e20230260` | Task 3 |
+| HENG Meylorng | `e20230260` | Task 3 |
 | HOUR Samnang | `e20230372` | Task 4 |
 | KIM Boramey | `e20231250` | Task 5 |
 
