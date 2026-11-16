@@ -1,46 +1,19 @@
-
 package edu.itc.shop.domain;
 
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicLong;
 
-public class ReviewRepository {
+/**
+ * Persistence contract for product reviews.
+ */
+public interface ReviewRepository {
 
-    private final AtomicLong nextId = new AtomicLong(1);
+    /**
+     * Returns all reviews belonging to the given product, ordered deterministically.
+     */
+    List<Review> findByProductId(long productId);
 
-    private final ConcurrentHashMap<Long, CopyOnWriteArrayList<Review>> reviews =
-            new ConcurrentHashMap<>();
-
-    public List<Review> findByProductId(long productId) {
-        return List.copyOf(
-                reviews.getOrDefault(
-                        productId,
-                        new CopyOnWriteArrayList<>()
-                )
-        );
-    }
-
-    public Review save(
-            long productId,
-            String author,
-            int stars,
-            String text) {
-
-        Review review = new Review(
-                nextId.getAndIncrement(),
-                productId,
-                author,
-                stars,
-                text
-        );
-
-        reviews.computeIfAbsent(
-                productId,
-                id -> new CopyOnWriteArrayList<>()
-        ).add(review);
-
-        return review;
-    }
+    /**
+     * Persists a review, assigning an ID when {@code review.id() == 0}.
+     */
+    Review save(Review review);
 }

@@ -17,7 +17,7 @@ public record ProductV2(
                 product.id(),
                 product.name(),
                 product.sku(),
-                new Money(product.price(), "USD"),
+                new Money(product.price(), "EUR"),
                 product.stock(),
                 product.stock() > 0
         );

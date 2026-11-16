@@ -17,16 +17,6 @@ public class ProductFilter {
 
     @QueryParam("q")
     public String q;
-    @QueryParam("page")
-@DefaultValue("0")
-@Min(0)
-public int page;
-
-@QueryParam("size")
-@DefaultValue("20")
-@Min(1)
-@Max(100)
-public int size;
 
     @QueryParam("minPrice")
     public Money minPrice;
@@ -44,7 +34,7 @@ public int size;
             regexp = "(name|price|stock),(asc|desc)",
             flags = Pattern.Flag.CASE_INSENSITIVE,
             message = "use name,asc|desc, price,asc|desc, or stock,asc|desc")
-    public String sort;
+    public String sort = "name,asc";
 
     @QueryParam("page")
     @DefaultValue("0")

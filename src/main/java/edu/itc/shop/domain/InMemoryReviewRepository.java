@@ -31,8 +31,8 @@ public class InMemoryReviewRepository implements ReviewRepository {
         Review saved = new Review(
                 id,
                 review.productId(),
-                review.stars(),
                 review.author(),
+                review.stars(),
                 review.text());
 
         reviews.put(id, saved);
