@@ -22,8 +22,7 @@ public class Main {
 
         ProductRepository repository =
                 new InMemoryProductRepository();
-        ReviewRepository reviewRepository =
-                new InMemoryReviewRepository();
+                ReviewRepository reviewRepository = new ReviewRepository();
 
         return new ResourceConfig()
                 .packages("edu.itc.shop.api")

@@ -33,9 +33,6 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.CacheControl;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.EntityTag;
-import jakarta.ws.rs.core.GenericEntity;
-import jakarta.ws.rs.core.HttpHeaders;
-import jakarta.ws.rs.core.Link;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Request;
 import jakarta.ws.rs.core.Response;
@@ -68,61 +65,108 @@ public class ProductResource {
     private final ProductRepository repository;
     private final ReviewRepository reviewRepository;
 
-    @Inject
-    public ProductResource(ProductRepository repository, ReviewRepository reviewRepository) {
-        this.repository = repository;
-        this.reviewRepository = reviewRepository;
+   @Inject
+public ProductResource(
+        ProductRepository repository,
+        ReviewRepository reviewRepository) {
+
+    this.repository = repository;
+    this.reviewRepository = reviewRepository;
+}
+
+   @GET
+public Response list(
+        @BeanParam @Valid ProductFilter filter,
+        @Context UriInfo uriInfo) {
+
+    List<Product> filtered = filter.filter(repository.findAll());
+
+    int total = filtered.size();
+
+    int lastPage = Math.max(0, (total - 1) / filter.size);
+
+    long start = (long) filter.page * filter.size;
+
+    int fromIndex = (int) Math.min(start, total);
+    int toIndex = Math.min(fromIndex + filter.size, total);
+
+    List<ProductDto> pageContent = filtered.subList(fromIndex, toIndex)
+            .stream()
+            .map(ProductDto::from)
+            .toList();
+
+    List<String> links = new java.util.ArrayList<>();
+
+    links.add(createPageLink(uriInfo, 0, "first"));
+
+    if (filter.page > 0) {
+        links.add(createPageLink(uriInfo, filter.page - 1, "prev"));
     }
 
-    /**
-     * Returns a paginated, filtered, and sorted product page with {@code X-Total-Count} and {@code Link} headers.
-     */
-    @GET
-    public Response list(@BeanParam @Valid ProductFilter filter, @Context UriInfo uriInfo) {
-        List<Product> all = filter.filter(repository.findAll());
-        int total = all.size();
-        int lastPage = Math.max(0, (total - 1) / filter.size);
-        List<ProductDto> page = all.stream()
-                .skip((long) filter.page * filter.size)
-                .limit(filter.size)
-                .map(ProductDto::from)
-                .toList();
-
-        var links = new ArrayList<Link>();
-        links.add(pageLink(uriInfo, 0, "first"));
-        if (filter.page > 0) {
-            links.add(pageLink(uriInfo, Math.min(filter.page - 1, lastPage), "prev"));
-        }
-        if (filter.page < lastPage) {
-            links.add(pageLink(uriInfo, filter.page + 1, "next"));
-        }
-        links.add(pageLink(uriInfo, lastPage, "last"));
-
-        return Response.ok(new GenericEntity<List<ProductDto>>(page) {})
-                .links(links.toArray(Link[]::new))
-                .header("X-Total-Count", total)
-                .build();
+    if (filter.page < lastPage) {
+        links.add(createPageLink(uriInfo, filter.page + 1, "next"));
     }
 
-    /**
-     * Returns v1 (JSON or XML) representation of a product with {@code ETag}, {@code Cache-Control}, and {@code 304} support.
-     */
-    @GET
-    @Path("/{id: \\d+}")
-    @Produces({"application/json; qs=1.0", V1_MEDIA_TYPE, MediaType.APPLICATION_XML})
-    public Response findById(@PathParam("id") long id, @Context Request request) {
-        return cachedProductResponse(id, request, ProductDto::from);
+    links.add(createPageLink(uriInfo, lastPage, "last"));
+
+    return Response.ok(pageContent)
+            .header("X-Total-Count", total)
+            .header("Link", String.join(", ", links))
+            .build();
+}
+private String createPageLink(UriInfo uriInfo, int page, String rel) {
+    String uri = uriInfo.getRequestUriBuilder()
+            .replaceQueryParam("page", page)
+            .build()
+            .toString();
+
+    return "<" + uri + ">; rel=\"" + rel + "\"";
+}
+@Produces({
+    MediaType.APPLICATION_JSON + "; qs=1.0",
+    "application/vnd.shop.v1+json",
+    MediaType.APPLICATION_XML
+})
+   @GET
+@Path("/{id: \\d+}")
+public Response findById(
+        @PathParam("id") long id,
+        @Context Request request) {
+
+    Product product = repository.findById(id)
+            .orElseThrow(() -> new NotFoundException("Product " + id + " not found"));
+
+    EntityTag tag = new EntityTag(
+            Integer.toHexString(product.version())
+    );
+
+    Response.ResponseBuilder precondition =
+            request.evaluatePreconditions(tag);
+
+    if (precondition != null) {
+        return precondition.tag(tag).build();
     }
 
-    /**
-     * Returns v2 representation of a product selected via {@code Accept: application/vnd.shop.v2+json}.
-     */
-    @GET
-    @Path("/{id: \\d+}")
-    @Produces(V2_MEDIA_TYPE)
-    public Response findByIdV2(@PathParam("id") long id, @Context Request request) {
-        return cachedProductResponse(id, request, ProductV2::from);
-    }
+    CacheControl cacheControl = new CacheControl();
+    cacheControl.setPrivate(true);
+    cacheControl.setMaxAge(60);
+    cacheControl.setNoTransform(true);
+
+    return Response.ok(ProductDto.from(product))
+            .tag(tag)
+            .cacheControl(cacheControl)
+            .build();
+}
+
+@GET
+@Path("/{id: \\d+}")
+@Produces("application/vnd.shop.v2+json")
+public ProductV2 findByIdV2(@PathParam("id") long id) {
+    Product product = repository.findById(id)
+            .orElseThrow(() -> new NotFoundException("Product " + id + " not found"));
+
+    return ProductV2.from(product);
+}
 
     @POST
     public Response create(@Valid @NotNull ProductDto dto, @Context UriInfo uriInfo) {
@@ -140,39 +184,48 @@ public class ProductResource {
                 .build();
     }
 
-    /**
-     * Replaces a product only when {@code If-Match} matches its current {@code ETag}.
-     */
-    @PUT
-    @Path("/{id: \\d+}")
-    public Response update(
-            @PathParam("id") long id,
-            @HeaderParam(HttpHeaders.IF_MATCH) String ifMatch,
-            @Context Request request,
-            @Valid @NotNull ProductDto dto) {
-        if (ifMatch == null || ifMatch.isBlank()) {
-            throw new ClientErrorException(
-                    "If-Match header is required",
-                    Response.status(PRECONDITION_REQUIRED).build());
-        }
-        Product existing = requireProduct(id);
-        EntityTag tag = entityTag(existing);
-        Response.ResponseBuilder precondition = evaluateIfMatch(request, tag);
-        if (precondition != null) {
-            return precondition.tag(tag).build();
-        }
-        if (dto.sku != null) {
-            repository.findBySku(dto.sku)
-                    .filter(p -> p.id() != id)
-                    .ifPresent(p -> {
-                        throw new DuplicateSkuException(dto.sku);
-                    });
-        }
-        Product updated = repository.save(dto.toProduct(id, existing.version()));
-        return Response.ok(ProductDto.from(updated))
-                .tag(entityTag(updated))
-                .build();
+
+@PUT
+@Path("/{id: \\d+}")
+public Response update(
+        @PathParam("id") long id,
+        @Valid @NotNull ProductDto dto,
+        @HeaderParam("If-Match") String ifMatch) {
+
+    if (ifMatch == null || ifMatch.isBlank()) {
+        return Response.status(428).build();
     }
+
+    Product existing = repository.findById(id)
+            .orElseThrow(() -> new NotFoundException("Product " + id + " not found"));
+
+    EntityTag currentTag = new EntityTag(
+            Integer.toHexString(existing.version())
+    );
+
+    if (!"*".equals(ifMatch.trim())
+            && !currentTag.toString().equals(ifMatch.trim())) {
+        return Response.status(Response.Status.PRECONDITION_FAILED).build();
+    }
+
+    if (dto.sku != null) {
+        repository.findBySku(dto.sku)
+                .filter(p -> p.id() != id)
+                .ifPresent(p -> {
+                    throw new DuplicateSkuException(dto.sku);
+                });
+    }
+
+    Product updated = repository.save(dto.toProduct(id, existing.version()));
+
+    EntityTag newTag = new EntityTag(
+            Integer.toHexString(updated.version())
+    );
+
+    return Response.ok(ProductDto.from(updated))
+            .tag(newTag)
+            .build();
+}
 
     @DELETE
     @Path("/{id: \\d+}")
@@ -194,51 +247,14 @@ public class ProductResource {
         return ProductDto.from(updated);
     }
 
-    /**
-     * Sub-resource locator delegating {@code /products/{id}/reviews} to {@link ReviewResource}.
-     */
-    @Path("/{id: \\d+}/reviews")
-    public ReviewResource reviews(@PathParam("id") long id) {
-        return new ReviewResource(requireProduct(id), reviewRepository);
-    }
+@Path("/{id: \\d+}/reviews")
+public ReviewResource reviews(@PathParam("id") long id) {
 
-    private Response cachedProductResponse(long id, Request request, Function<Product, ?> mapper) {
-        Product product = requireProduct(id);
-        EntityTag tag = entityTag(product);
-        Response.ResponseBuilder conditional = request.evaluatePreconditions(tag);
-        if (conditional != null) {
-            return conditional.tag(tag).build();
-        }
-        CacheControl cc = new CacheControl();
-        cc.setPrivate(true);
-        cc.setMaxAge(60);
-        cc.setNoTransform(true);
-        return Response.ok(mapper.apply(product))
-                .tag(tag)
-                .cacheControl(cc)
-                .build();
-    }
+    Product product = repository.findById(id)
+            .orElseThrow(() ->
+                    new NotFoundException("Product " + id + " not found"));
 
-    private Product requireProduct(long id) {
-        return repository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Product " + id + " not found"));
-    }
+    return new ReviewResource(product, reviewRepository);
+}
 
-    private static EntityTag entityTag(Product product) {
-        return new EntityTag(Integer.toHexString(product.version()));
-    }
-
-    private static Response.ResponseBuilder evaluateIfMatch(Request request, EntityTag tag) {
-        try {
-            return request.evaluatePreconditions(tag);
-        } catch (IllegalArgumentException exception) {
-            throw new BadRequestException("Invalid If-Match header", exception);
-        }
-    }
-
-    private static Link pageLink(UriInfo uriInfo, int page, String rel) {
-        return Link.fromUriBuilder(uriInfo.getRequestUriBuilder().replaceQueryParam("page", page))
-                .rel(rel)
-                .build();
-    }
 }
