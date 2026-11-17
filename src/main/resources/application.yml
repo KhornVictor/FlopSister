@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: shop-secure
+  datasource:
+    url: jdbc:h2:mem:shop
+  jpa:
+    hibernate:
+      ddl-auto: update
+  h2:
+    console:
+      enabled: false
