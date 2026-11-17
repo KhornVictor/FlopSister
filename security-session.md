@@ -123,3 +123,42 @@ Expires: 0
 X-Frame-Options: DENY
 Date: Tue, 17 Nov 2026 05:51:36 GMT
 ```
+
+---
+
+## Task 2 — JPA Accounts, Password Encoding and Registration
+
+### 1. Automated integration tests
+
+Command:
+
+```bash
+./mvnw -Dtest=AccountIntegrationTest test
+
+Tests run: 6, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
+Verified:
+- Admin and Alice seed accounts have the expected roles.
+- Password hashes use the {bcrypt} format.
+- JpaUserDetailsService loads the correct authorities.
+- Registration creates a CUSTOMER account in the database.
+- Duplicate usernames return HTTP 409.
+- Invalid registration returns HTTP 400.
+- Running the seed process again does not duplicate accounts.
+
+### 2. Complete test suite
+
+Command:
+
+```bash
+./mvnw clean test
+```
+
+Result:
+
+```text
+Tests run: 16, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```

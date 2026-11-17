@@ -9,3 +9,8 @@ spring:
   h2:
     console:
       enabled: false
+
+shop:
+  seed:
+    admin-password: ${SHOP_SEED_ADMIN_PASSWORD:ChangeMeAdmin123}
+    customer-password: ${SHOP_SEED_CUSTOMER_PASSWORD:ChangeMeAlice123}

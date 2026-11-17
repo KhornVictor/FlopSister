@@ -1,9 +1,8 @@
 package edu.itc.shop.config;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.net.URI;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
@@ -14,15 +13,15 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Security configuration for the Task 1 HTTP Basic stateless API filter chain.
+ * Security configuration for the stateless API.
  */
 @Configuration
 @EnableWebSecurity
@@ -37,6 +36,7 @@ public class SecurityConfig {
         };
 
         http.authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.POST, "/api/register").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
                         .requestMatchers(HttpMethod.DELETE, "/api/products/**").hasRole("ADMIN")
                         .requestMatchers("/api/**").authenticated()
@@ -50,14 +50,8 @@ public class SecurityConfig {
                         .authenticationEntryPoint(entryPoint)
                         .accessDeniedHandler((req, res, ex) -> writeProblem(res, req, jsonMapper,
                                 HttpStatus.FORBIDDEN, "Forbidden", "Access denied")));
-        return http.build();
-    }
 
-    @Bean
-    UserDetailsService temporaryUsers() { // removed in Task 2
-        return new InMemoryUserDetailsManager(
-                User.withUsername("admin").password("{noop}admin").roles("ADMIN").build(),
-                User.withUsername("alice").password("{noop}alice").roles("CUSTOMER").build());
+        return http.build();
     }
 
     private static void writeProblem(HttpServletResponse response, HttpServletRequest request,
