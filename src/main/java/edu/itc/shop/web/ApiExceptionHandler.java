@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -17,6 +18,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import edu.itc.shop.service.ProductNotFoundException;
 import edu.itc.shop.service.UsernameTakenException;
 import jakarta.servlet.http.HttpServletRequest;
+
 
 /**
  * Translates application exceptions into RFC 9457 ProblemDetail responses.
@@ -131,6 +133,21 @@ public class ApiExceptionHandler {
         );
     }
 
+
+    /**
+     * Handles access-denied exceptions from method-level security.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ProblemDetail handleAccessDenied(
+            AccessDeniedException ex,
+            HttpServletRequest request) {
+        return problem(
+                HttpStatus.FORBIDDEN,
+                "Forbidden",
+                "Access denied",
+                request
+        );
+    }
     private static ProblemDetail problem(
             HttpStatus status,
             String title,

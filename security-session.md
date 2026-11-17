@@ -162,3 +162,82 @@ Result:
 Tests run: 16, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
+---
+
+## Task 3 — Roles and Method Security
+
+### 1. Alice creates an order — 201 Created
+
+**Request:**
+```http
+POST /api/orders
+Authorization: Basic (alice)
+Content-Type: application/json
+
+{"productId":1,"quantity":2}
+```
+
+**Response:**
+```http
+HTTP/1.1 201 Created
+```
+
+```json
+{
+  "customer": "alice",
+  "productId": 1,
+  "quantity": 2,
+  "id": 1,
+  "status": "NEW"
+}
+```
+
+### 2. Bob attempts to read Alice's order — 403 Forbidden
+
+**Request:**
+```http
+GET /api/orders/1
+Authorization: Basic (bob)
+```
+
+**Response:**
+```http
+HTTP/1.1 403 Forbidden
+Content-Type: application/problem+json
+```
+
+```json
+{
+  "detail": "Access denied",
+  "instance": "/api/orders/1",
+  "status": 403,
+  "title": "Forbidden",
+  "type": "about:blank"
+}
+```
+
+### 3. Admin reads Alice's order — 200 OK
+
+**Request:**
+```http
+GET /api/orders/1
+Authorization: Basic (admin)
+```
+
+**Response:**
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+```
+
+```json
+{
+  "customer": "alice",
+  "productId": 1,
+  "quantity": 2,
+  "id": 1,
+  "status": "NEW"
+}
+```
+
+**Result:** All three HTTP demonstrations passed. Alice successfully created an order, Bob was denied access to another customer's order, and Admin successfully accessed it.
