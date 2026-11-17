@@ -129,4 +129,19 @@ class ProductSecurityTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.name").value("Mouse"));
     }
+
+    @Test
+    void wrongBasicCredentialsReturn401WithOriginalInstance() throws Exception {
+        mockMvc.perform(post("/api/products")
+                        .with(httpBasic("alice", "wrong"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Mouse\",\"price\":19.9,\"stock\":5}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("WWW-Authenticate", "Basic realm=\"Realm\""))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.instance").value("/api/products"));
+
+        verifyNoInteractions(products);
+    }
 }

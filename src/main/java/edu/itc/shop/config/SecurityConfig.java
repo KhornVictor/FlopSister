@@ -11,13 +11,13 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -30,22 +30,24 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain api(HttpSecurity http, JsonMapper jsonMapper) throws Exception {
+        AuthenticationEntryPoint entryPoint = (req, res, ex) -> {
+            res.setHeader(HttpHeaders.WWW_AUTHENTICATE, "Basic realm=\"Realm\"");
+            writeProblem(res, req, jsonMapper, HttpStatus.UNAUTHORIZED, "Unauthorized",
+                    "Authentication required");
+        };
+
         http.authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
                         .requestMatchers(HttpMethod.DELETE, "/api/products/**").hasRole("ADMIN")
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().denyAll())
-                .httpBasic(Customizer.withDefaults())
+                .httpBasic(basic -> basic.authenticationEntryPoint(entryPoint))
                 .formLogin(form -> form.disable())
                 // CSRF disabled: this chain accepts no cookie-based credentials (Basic / Bearer only)
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(e -> e
-                        .authenticationEntryPoint((req, res, ex) -> {
-                            res.setHeader(HttpHeaders.WWW_AUTHENTICATE, "Basic realm=\"Realm\"");
-                            writeProblem(res, req, jsonMapper, HttpStatus.UNAUTHORIZED, "Unauthorized",
-                                    "Authentication required");
-                        })
+                        .authenticationEntryPoint(entryPoint)
                         .accessDeniedHandler((req, res, ex) -> writeProblem(res, req, jsonMapper,
                                 HttpStatus.FORBIDDEN, "Forbidden", "Access denied")));
         return http.build();
