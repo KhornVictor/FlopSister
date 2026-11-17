@@ -1,10 +1,27 @@
+
 package edu.itc.shop;
 
+import java.math.BigDecimal;
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.crypto.factory.PasswordEncoderFactories;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -18,18 +35,12 @@ import edu.itc.shop.domain.Product;
 import edu.itc.shop.service.ProductNotFoundException;
 import edu.itc.shop.service.ProductService;
 import edu.itc.shop.web.ProductController;
-import java.math.BigDecimal;
-import java.util.List;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.context.annotation.Import;
-import org.springframework.http.MediaType;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(ProductController.class)
-@Import(SecurityConfig.class)
+@Import({
+        SecurityConfig.class,
+        ProductSecurityTest.TestUsersConfiguration.class
+})
 class ProductSecurityTest {
 
     @Autowired
@@ -38,9 +49,40 @@ class ProductSecurityTest {
     @MockitoBean
     private ProductService products;
 
+    /**
+     * Test-only users for the WebMvcTest security tests.
+     * These users do not affect the real application database.
+     */
+    @TestConfiguration(proxyBeanMethods = false)
+    static class TestUsersConfiguration {
+
+        @Bean
+        PasswordEncoder testPasswordEncoder() {
+            return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+        }
+
+        @Bean
+        InMemoryUserDetailsManager testUsers(PasswordEncoder testPasswordEncoder) {
+
+            var alice = User.withUsername("alice")
+                    .password(testPasswordEncoder.encode("alice"))
+                    .roles("CUSTOMER")
+                    .build();
+
+            var admin = User.withUsername("admin")
+                    .password(testPasswordEncoder.encode("admin"))
+                    .roles("ADMIN", "CUSTOMER")
+                    .build();
+
+            return new InMemoryUserDetailsManager(alice, admin);
+        }
+    }
+
     @Test
     void anonymousCanReadProductList() throws Exception {
-        when(products.findAll()).thenReturn(List.of(new Product("USB-C cable", new BigDecimal("7.90"), 25)));
+        when(products.findAll()).thenReturn(
+                List.of(new Product("USB-C cable", new BigDecimal("7.90"), 25))
+        );
 
         mockMvc.perform(get("/api/products"))
                 .andExpect(status().isOk())
@@ -67,7 +109,8 @@ class ProductSecurityTest {
 
     @Test
     void customerDeleteReturns403ProblemJson() throws Exception {
-        mockMvc.perform(delete("/api/products/1").with(httpBasic("alice", "alice")))
+        mockMvc.perform(delete("/api/products/1")
+                        .with(httpBasic("alice", "alice")))
                 .andExpect(status().isForbidden())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.type").value("about:blank"))
@@ -83,20 +126,23 @@ class ProductSecurityTest {
     void adminDeleteReturns204() throws Exception {
         doNothing().when(products).delete(1L);
 
-        mockMvc.perform(delete("/api/products/1").with(httpBasic("admin", "admin")))
+        mockMvc.perform(delete("/api/products/1")
+                        .with(httpBasic("admin", "admin")))
                 .andExpect(status().isNoContent());
     }
 
     @Test
     void nonApiRequestIsDeniedEvenForAdmin() throws Exception {
-        mockMvc.perform(get("/other").with(httpBasic("admin", "admin")))
+        mockMvc.perform(get("/other")
+                        .with(httpBasic("admin", "admin")))
                 .andExpect(status().isForbidden())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
     }
 
     @Test
     void missingProductReturns404ProblemJson() throws Exception {
-        when(products.findById(999L)).thenThrow(new ProductNotFoundException(999L));
+        when(products.findById(999L))
+                .thenThrow(new ProductNotFoundException(999L));
 
         mockMvc.perform(get("/api/products/999"))
                 .andExpect(status().isNotFound())
@@ -120,7 +166,8 @@ class ProductSecurityTest {
 
     @Test
     void authenticatedCustomerCanCreateProduct() throws Exception {
-        when(products.create(any())).thenReturn(new Product("Mouse", new BigDecimal("19.90"), 5));
+        when(products.create(any()))
+                .thenReturn(new Product("Mouse", new BigDecimal("19.90"), 5));
 
         mockMvc.perform(post("/api/products")
                         .with(httpBasic("alice", "alice"))
