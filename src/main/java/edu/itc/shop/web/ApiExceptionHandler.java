@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -148,6 +149,19 @@ public class ApiExceptionHandler {
                 request
         );
     }
+
+    @ExceptionHandler(AuthenticationException.class)
+    public ProblemDetail handleAuthenticationFailure(
+            AuthenticationException ex,
+            HttpServletRequest request) {
+        return problem(
+                HttpStatus.UNAUTHORIZED,
+                "Unauthorized",
+                "Bad credentials",
+                request
+        );
+    }
+
     private static ProblemDetail problem(
             HttpStatus status,
             String title,

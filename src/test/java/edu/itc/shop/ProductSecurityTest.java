@@ -10,16 +10,11 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.crypto.factory.PasswordEncoderFactories;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -29,6 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.hamcrest.Matchers.containsString;
 
 import edu.itc.shop.config.SecurityConfig;
 import edu.itc.shop.domain.Product;
@@ -39,7 +35,7 @@ import edu.itc.shop.web.ProductController;
 @WebMvcTest(ProductController.class)
 @Import({
         SecurityConfig.class,
-        ProductSecurityTest.TestUsersConfiguration.class
+        JwtTestSecurityConfiguration.class
 })
 class ProductSecurityTest {
 
@@ -48,35 +44,6 @@ class ProductSecurityTest {
 
     @MockitoBean
     private ProductService products;
-
-    /**
-     * Test-only users for the WebMvcTest security tests.
-     * These users do not affect the real application database.
-     */
-    @TestConfiguration(proxyBeanMethods = false)
-    static class TestUsersConfiguration {
-
-        @Bean
-        PasswordEncoder testPasswordEncoder() {
-            return PasswordEncoderFactories.createDelegatingPasswordEncoder();
-        }
-
-        @Bean
-        InMemoryUserDetailsManager testUsers(PasswordEncoder testPasswordEncoder) {
-
-            var alice = User.withUsername("alice")
-                    .password(testPasswordEncoder.encode("alice"))
-                    .roles("CUSTOMER")
-                    .build();
-
-            var admin = User.withUsername("admin")
-                    .password(testPasswordEncoder.encode("admin"))
-                    .roles("ADMIN", "CUSTOMER")
-                    .build();
-
-            return new InMemoryUserDetailsManager(alice, admin);
-        }
-    }
 
     @Test
     void anonymousCanReadProductList() throws Exception {
@@ -96,7 +63,7 @@ class ProductSecurityTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"Mouse\",\"price\":19.9,\"stock\":5}"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(header().string("WWW-Authenticate", "Basic realm=\"Realm\""))
+                .andExpect(header().string("WWW-Authenticate", "Bearer"))
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.type").value("about:blank"))
                 .andExpect(jsonPath("$.title").value("Unauthorized"))
@@ -110,7 +77,7 @@ class ProductSecurityTest {
     @Test
     void customerDeleteReturns403ProblemJson() throws Exception {
         mockMvc.perform(delete("/api/products/1")
-                        .with(httpBasic("alice", "alice")))
+                        .with(aliceJwt()))
                 .andExpect(status().isForbidden())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.type").value("about:blank"))
@@ -127,14 +94,14 @@ class ProductSecurityTest {
         doNothing().when(products).delete(1L);
 
         mockMvc.perform(delete("/api/products/1")
-                        .with(httpBasic("admin", "admin")))
+                        .with(adminJwt()))
                 .andExpect(status().isNoContent());
     }
 
     @Test
     void nonApiRequestIsDeniedEvenForAdmin() throws Exception {
         mockMvc.perform(get("/other")
-                        .with(httpBasic("admin", "admin")))
+                        .with(adminJwt()))
                 .andExpect(status().isForbidden())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
     }
@@ -153,7 +120,7 @@ class ProductSecurityTest {
     @Test
     void invalidProductPostReturns400ProblemJson() throws Exception {
         mockMvc.perform(post("/api/products")
-                        .with(httpBasic("alice", "alice"))
+                        .with(aliceJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"\",\"price\":0,\"stock\":-1}"))
                 .andExpect(status().isBadRequest())
@@ -170,7 +137,7 @@ class ProductSecurityTest {
                 .thenReturn(new Product("Mouse", new BigDecimal("19.90"), 5));
 
         mockMvc.perform(post("/api/products")
-                        .with(httpBasic("alice", "alice"))
+                        .with(aliceJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"Mouse\",\"price\":19.9,\"stock\":5}"))
                 .andExpect(status().isCreated())
@@ -178,17 +145,33 @@ class ProductSecurityTest {
     }
 
     @Test
-    void wrongBasicCredentialsReturn401WithOriginalInstance() throws Exception {
+    void malformedBearerTokenReturns401WithOriginalInstance() throws Exception {
         mockMvc.perform(post("/api/products")
-                        .with(httpBasic("alice", "wrong"))
+                        .header("Authorization", "Bearer not.a.jwt")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"Mouse\",\"price\":19.9,\"stock\":5}"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(header().string("WWW-Authenticate", "Basic realm=\"Realm\""))
+                .andExpect(header().string("WWW-Authenticate", containsString("error=\"invalid_token\"")))
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.detail").value("Token expired or invalid"))
                 .andExpect(jsonPath("$.instance").value("/api/products"));
 
         verifyNoInteractions(products);
+    }
+
+    private static org.springframework.test.web.servlet.request.RequestPostProcessor aliceJwt() {
+        return jwt()
+                .jwt(token -> token.subject("alice").claim("roles", List.of("ROLE_CUSTOMER")))
+                .authorities(new SimpleGrantedAuthority("ROLE_CUSTOMER"));
+    }
+
+    private static org.springframework.test.web.servlet.request.RequestPostProcessor adminJwt() {
+        return jwt()
+                .jwt(token -> token.subject("admin")
+                        .claim("roles", List.of("ROLE_ADMIN", "ROLE_CUSTOMER")))
+                .authorities(
+                        new SimpleGrantedAuthority("ROLE_ADMIN"),
+                        new SimpleGrantedAuthority("ROLE_CUSTOMER"));
     }
 }

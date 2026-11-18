@@ -1,6 +1,7 @@
 package edu.itc.shop;
 
 import java.util.UUID;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
@@ -11,9 +12,10 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -194,14 +196,22 @@ class AccountIntegrationTest {
     @Test
     void meReturnsAuthenticatedUserAndRoles() throws Exception {
         mockMvc.perform(get("/api/me")
-                        .with(httpBasic("alice", customerPassword)))
+                        .with(jwt()
+                                .jwt(token -> token.subject("alice")
+                                        .claim("roles", List.of("ROLE_CUSTOMER")))
+                                .authorities(new SimpleGrantedAuthority("ROLE_CUSTOMER"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("alice"))
                 .andExpect(jsonPath("$.roles").isArray())
                 .andExpect(jsonPath("$.roles[0]").value("ROLE_CUSTOMER"));
 
         mockMvc.perform(get("/api/me")
-                        .with(httpBasic("admin", adminPassword)))
+                        .with(jwt()
+                                .jwt(token -> token.subject("admin")
+                                        .claim("roles", List.of("ROLE_ADMIN", "ROLE_CUSTOMER")))
+                                .authorities(
+                                        new SimpleGrantedAuthority("ROLE_ADMIN"),
+                                        new SimpleGrantedAuthority("ROLE_CUSTOMER"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("admin"))
                 .andExpect(jsonPath("$.roles[0]").value("ROLE_ADMIN"))

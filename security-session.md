@@ -303,3 +303,74 @@ Combined Surefire reports (`AccountIntegrationTest`, `OrderControllerSecurityTes
 ```text
 Tests run: 24, Failures: 0, Errors: 0, Skipped: 0
 ```
+
+---
+
+## Task 4 — JWT Login and Stateless API
+
+### 1. Login and access a protected endpoint
+
+The login response's signed token is intentionally omitted from this transcript. It is a bearer credential and should not be committed or shared.
+
+```http
+$ curl -i -X POST http://localhost:8080/api/auth/login `
+    -H "Content-Type: application/json" `
+    -d '{"username":"alice","password":"<configured customer seed password>"}'
+HTTP/1.1 200
+Content-Type: application/json
+
+{"token":"<redacted>","tokenType":"Bearer","expiresIn":900}
+```
+
+After storing the returned token in `$TOKEN`, use it on an authenticated API request:
+
+```http
+$ curl -i http://localhost:8080/api/orders -H "Authorization: Bearer $TOKEN"
+HTTP/1.1 200
+Content-Type: application/json
+
+[]
+```
+
+The response contains no `Set-Cookie` header; authentication is stateless.
+
+### 2. Decoded JWT header and payload
+
+```json
+{"alg":"HS256"}
+```
+
+```json
+{
+  "iss": "shop-api",
+  "sub": "alice",
+  "iat": "<issued-at timestamp>",
+  "exp": "<issued-at timestamp + 900 seconds>",
+  "jti": "<unique UUID>",
+  "roles": ["ROLE_CUSTOMER"]
+}
+```
+
+The payload is readable because JWT signing provides integrity, not encryption. That is acceptable here because it contains identity/role metadata rather than passwords or the signing key; consumers must still validate the signature and expiry.
+
+### 3. Invalid credentials and expired token
+
+```http
+$ curl -i -X POST http://localhost:8080/api/auth/login `
+    -H "Content-Type: application/json" `
+    -d '{"username":"alice","password":"incorrect-password"}'
+HTTP/1.1 401
+Content-Type: application/problem+json
+
+{"type":"about:blank","title":"Unauthorized","status":401,"detail":"Bad credentials","instance":"/api/auth/login"}
+```
+
+An expired or malformed Bearer token returns `401 application/problem+json` with `WWW-Authenticate: Bearer error="invalid_token"` and the generic body detail `Token expired or invalid`.
+
+### 4. Automated flow test
+
+```text
+AuthFlowIT: login → token claims verified → GET /api/orders with Bearer token → 200
+AuthFlowIT: expired token → 401 application/problem+json
+AuthFlowIT: incorrect password → 401 application/problem+json
+```
