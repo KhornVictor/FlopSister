@@ -1,5 +1,14 @@
 package edu.itc.shop.config;
 
+//imports for task 5 (subtask 6) :<
+import edu.itc.shop.security.RequestIdFilter;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
+//end of import
+//imports for task 5 (subtask 2):>
+import java.util.List;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+//end of import
 import java.io.IOException;
 import java.net.URI;
 
@@ -48,13 +57,33 @@ public class SecurityConfig {
         };
 
         http.authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**", "/api/register").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
-                        .requestMatchers(HttpMethod.DELETE, "/api/products/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/api/orders/*/ship").hasRole("ADMIN")
-                        .requestMatchers("/api/**").authenticated()
-                        .anyRequest().denyAll())
+                .requestMatchers("/api/auth/**", "/api/register").permitAll()
+                // .requestMatchers("/demo/reviews").permitAll()
+                .requestMatchers(HttpMethod.GET, "/demo/reviews").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
+                .requestMatchers(HttpMethod.DELETE, "/api/products/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/orders/*/ship").hasRole("ADMIN")
+                .requestMatchers("/api/**").authenticated()
+                .anyRequest().denyAll())
                 .formLogin(form -> form.disable())
+                .cors(cors -> {
+                })
+                .headers(headers -> headers
+                        .frameOptions(frame -> frame.deny())
+                        .httpStrictTransportSecurity(hsts -> hsts
+                                .includeSubDomains(true)
+                                .maxAgeInSeconds(31536000))
+                        .referrerPolicy(referrer -> referrer
+                                .policy(
+                                        org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+                        .contentSecurityPolicy(csp -> csp
+                                .policyDirectives(
+                                        "default-src 'self'; " +
+                                                "script-src 'self'; " +
+                                                "style-src 'self'; " +
+                                                "object-src 'none'; " +
+                                                "base-uri 'self'; " +
+                                                "frame-ancestors 'none'")))
                 // CSRF disabled: this chain accepts Bearer tokens only, never cookies.
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -64,9 +93,30 @@ public class SecurityConfig {
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint(entryPoint)
                         .accessDeniedHandler((req, res, ex) -> writeProblem(res, req, jsonMapper,
-                                HttpStatus.FORBIDDEN, "Forbidden", "Access denied")));
+                                HttpStatus.FORBIDDEN, "Forbidden", "Access denied")))
+                .addFilterBefore(new RequestIdFilter(), AuthorizationFilter.class);
 
         return http.build();
+    }
+
+    @Bean
+    UrlBasedCorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+
+        config.setAllowedOrigins(List.of("http://localhost:5173"));
+        config.setAllowedMethods(List.of(
+                "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of(
+                "Authorization", "Content-Type"));
+        config.setExposedHeaders(List.of("Location"));
+        config.setAllowCredentials(false);
+        config.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+
+        source.registerCorsConfiguration("/api/**", config);
+
+        return source;
     }
 
     private static void writeProblem(HttpServletResponse response, HttpServletRequest request,

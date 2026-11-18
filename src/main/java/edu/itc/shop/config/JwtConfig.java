@@ -1,5 +1,8 @@
 package edu.itc.shop.config;
-
+//imports for task 5
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.authentication.DefaultAuthenticationEventPublisher;
+//
 import java.nio.charset.StandardCharsets;
 
 import javax.crypto.SecretKey;
@@ -55,12 +58,25 @@ public class JwtConfig {
         return converter;
     }
 
-    @Bean
-    AuthenticationManager authenticationManager(
-            UserDetailsService userDetailsService,
-            PasswordEncoder passwordEncoder) {
-        DaoAuthenticationProvider provider = new DaoAuthenticationProvider(userDetailsService);
-        provider.setPasswordEncoder(passwordEncoder);
-        return new ProviderManager(provider);
-    }
+    
+@Bean
+AuthenticationManager authenticationManager(
+        UserDetailsService userDetailsService,
+        PasswordEncoder passwordEncoder,
+        ApplicationEventPublisher eventPublisher) {
+
+    DaoAuthenticationProvider provider =
+            new DaoAuthenticationProvider(userDetailsService);
+
+    provider.setPasswordEncoder(passwordEncoder);
+
+    ProviderManager manager = new ProviderManager(provider);
+
+    manager.setAuthenticationEventPublisher(
+            new DefaultAuthenticationEventPublisher(eventPublisher)
+    );
+
+    return manager;
+}
+
 }
