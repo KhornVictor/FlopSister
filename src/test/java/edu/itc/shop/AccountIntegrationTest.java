@@ -13,7 +13,9 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import org.springframework.test.web.servlet.MockMvc;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -179,5 +181,30 @@ class AccountIntegrationTest {
 
         assertThat(userAccountRepository.findByUsername("alice")
                 .orElseThrow().getId()).isEqualTo(aliceId);
+    }
+
+    @Test
+    void meRequiresAuthentication() throws Exception {
+        mockMvc.perform(get("/api/me"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_PROBLEM_JSON));
+    }
+
+    @Test
+    void meReturnsAuthenticatedUserAndRoles() throws Exception {
+        mockMvc.perform(get("/api/me")
+                        .with(httpBasic("alice", customerPassword)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("alice"))
+                .andExpect(jsonPath("$.roles").isArray())
+                .andExpect(jsonPath("$.roles[0]").value("ROLE_CUSTOMER"));
+
+        mockMvc.perform(get("/api/me")
+                        .with(httpBasic("admin", adminPassword)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("admin"))
+                .andExpect(jsonPath("$.roles[0]").value("ROLE_ADMIN"))
+                .andExpect(jsonPath("$.roles[1]").value("ROLE_CUSTOMER"));
     }
 }

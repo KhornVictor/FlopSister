@@ -126,7 +126,7 @@ Date: Tue, 17 Nov 2026 05:51:36 GMT
 
 ---
 
-## Task 2 — JPA Accounts, Password Encoding and Registration
+## Task 2 — JPA Accounts, Password Encoding, and Registration
 
 ### 1. Automated integration tests
 
@@ -134,21 +134,34 @@ Command:
 
 ```bash
 ./mvnw -Dtest=AccountIntegrationTest test
+```
 
+Result:
+
+```text
 Tests run: 6, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
 Verified:
-- Admin and Alice seed accounts have the expected roles.
-- Password hashes use the {bcrypt} format.
-- JpaUserDetailsService loads the correct authorities.
-- Registration creates a CUSTOMER account in the database.
-- Duplicate usernames return HTTP 409.
-- Invalid registration returns HTTP 400.
+
+- `admin` and `alice` seed accounts have the expected roles.
+- Password hashes use the `{bcrypt}` format.
+- `JpaUserDetailsService` loads the expected authorities.
+- Registration creates a `CUSTOMER` account in the database.
+- Duplicate usernames return `409 Conflict`.
+- Invalid registration returns `400 Bad Request`.
 - Running the seed process again does not duplicate accounts.
 
-### 2. Complete test suite
+### 2. Persisted database row (`{bcrypt}` hash)
+
+Logged by `AccountIntegrationTest#seededAccountsHaveCorrectRolesAndBcryptPasswords`:
+
+```text
+DATABASE ROW: username=alice, password_hash={bcrypt}$2a$10$IXHUVtEseDYgsCOgSFFZm.hEek9bz9JFwRk1WeWkt76nOAjoCRF7y
+```
+
+### 3. Complete test suite (Task 2)
 
 Command:
 
@@ -162,13 +175,15 @@ Result:
 Tests run: 16, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
+
 ---
 
 ## Task 3 — Roles and Method Security
 
-### 1. Alice creates an order — 201 Created
+### 1. Alice creates an order — `201 Created`
 
 **Request:**
+
 ```http
 POST /api/orders
 Authorization: Basic (alice)
@@ -178,6 +193,7 @@ Content-Type: application/json
 ```
 
 **Response:**
+
 ```http
 HTTP/1.1 201 Created
 ```
@@ -192,15 +208,17 @@ HTTP/1.1 201 Created
 }
 ```
 
-### 2. Bob attempts to read Alice's order — 403 Forbidden
+### 2. Bob attempts to read Alice's order — `403 Forbidden`
 
 **Request:**
+
 ```http
 GET /api/orders/1
 Authorization: Basic (bob)
 ```
 
 **Response:**
+
 ```http
 HTTP/1.1 403 Forbidden
 Content-Type: application/problem+json
@@ -216,15 +234,17 @@ Content-Type: application/problem+json
 }
 ```
 
-### 3. Admin reads Alice's order — 200 OK
+### 3. Admin reads Alice's order — `200 OK`
 
 **Request:**
+
 ```http
 GET /api/orders/1
 Authorization: Basic (admin)
 ```
 
 **Response:**
+
 ```http
 HTTP/1.1 200 OK
 Content-Type: application/json
@@ -241,3 +261,45 @@ Content-Type: application/json
 ```
 
 **Result:** All three HTTP demonstrations passed. Alice successfully created an order, Bob was denied access to another customer's order, and Admin successfully accessed it.
+
+### 4. Automated order security tests
+
+Command:
+
+```bash
+./mvnw -Dtest='Order*SecurityTest' test
+```
+
+Surefire reports (`target/surefire-reports/`):
+
+```text
+OrderControllerSecurityTest: Tests run: 3, Failures: 0, Errors: 0, Skipped: 0
+OrderServiceSecurityTest:    Tests run: 5, Failures: 0, Errors: 0, Skipped: 0
+```
+
+Verified:
+
+- `OrderServiceSecurityTest` (`@SpringBootTest`, 5 tests):
+  - `alice` (`CUSTOMER`) can view her own order history.
+  - `alice` (`CUSTOMER`) cannot view `bob`'s order history (`AccessDeniedException`).
+  - `admin` (`ADMIN`, `CUSTOMER`) can view `bob`'s order history.
+  - `alice` (`CUSTOMER`) cannot ship an order (`AccessDeniedException`).
+  - Unauthenticated caller cannot access order history (`AuthenticationCredentialsNotFoundException`).
+- `OrderControllerSecurityTest` (`@WebMvcTest`, 3 tests):
+  - Anonymous `GET /api/orders` returns `401 Unauthorized` (`application/problem+json`).
+  - Customer (`alice`) `POST /api/orders/1/ship` returns `403 Forbidden` (`application/problem+json`).
+  - Admin (`admin`) `POST /api/orders/1/ship` returns `204 No Content`.
+
+### 5. Complete test suite (Task 3)
+
+Command:
+
+```bash
+./mvnw clean test
+```
+
+Combined Surefire reports (`AccountIntegrationTest`, `OrderControllerSecurityTest`, `OrderServiceSecurityTest`, `ProductSecurityTest`, `ShopSecureApplicationTests`):
+
+```text
+Tests run: 24, Failures: 0, Errors: 0, Skipped: 0
+```
