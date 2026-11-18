@@ -249,3 +249,189 @@ BUILD SUCCESS
 ```
 
 The complete test suite passed with 16 tests, zero failures, zero errors, and zero skipped tests.
+
+---
+
+## Task 3 — Roles and Method Security
+
+Task 3 adds customer-owned orders, declarative method-level authorization (`@PreAuthorize` and `@PostAuthorize`), a `RoleHierarchy` where `ADMIN` implies `CUSTOMER`, unified `application/problem+json` handling for method-security denials, and service/controller security tests.
+
+### 1. Order Domain and Repository
+
+#### `edu.itc.shop.domain.Order`
+
+The `Order` entity maps customer orders to the `shop_orders` database table.
+
+| Field | Description |
+| --- | --- |
+| `id` | Generated primary key (`Long`) |
+| `customer` | Non-null owner username (`String`) |
+| `productId` | Non-null ordered product ID (`Long`) |
+| `quantity` | Non-null item quantity (`int`) |
+| `status` | Non-null `Order.Status` enum (`NEW`, `SHIPPED`, `CANCELLED`), defaulting to `NEW` |
+
+#### `edu.itc.shop.repository.OrderRepository`
+
+Extends `JpaRepository<Order, Long>` and provides customer order lookups:
+
+```java
+List<Order> findByCustomer(String customer);
+```
+
+### 2. Method Security and Role Hierarchy
+
+**`edu.itc.shop.config.MethodSecurityConfig`**
+
+Enables Spring Security method-level authorization via `@EnableMethodSecurity` and defines a `RoleHierarchy` bean:
+
+```java
+@Bean
+RoleHierarchy roleHierarchy() {
+    return RoleHierarchyImpl.fromHierarchy("ROLE_ADMIN > ROLE_CUSTOMER");
+}
+```
+
+With this hierarchy in place, `ADMIN` implicitly satisfies `CUSTOMER` role checks across security evaluations.
+
+### 3. Order Service Authorization Rules
+
+**`edu.itc.shop.service.OrderService`**
+
+Order authorization is enforced declaratively on service methods rather than imperative `if` checks in controllers:
+
+| Method | Annotation | Rule / Behavior |
+| --- | --- | --- |
+| `place(String customerId, PlaceOrder cmd)` | `@PreAuthorize("#customerId == authentication.name")` | A user can only place an order under their own username |
+| `history(String customerId)` | `@PreAuthorize("hasRole('ADMIN') or #customerId == authentication.name")` | Customers can view their own history; `ADMIN` can view any customer's history |
+| `get(long id)` | `@PostAuthorize("hasRole('ADMIN') or returnObject.customer == authentication.name")` | Customers can view only their own order; `ADMIN` can view any order |
+| `ship(long id)` | `@PreAuthorize("hasRole('ADMIN')")` | Only `ADMIN` can ship an order (sets status to `Order.Status.SHIPPED`) |
+| `all()` | `@PreAuthorize("hasRole('ADMIN')")` | Only `ADMIN` can retrieve all orders |
+
+### 4. Order API and Request Validation
+
+**`edu.itc.shop.web.OrderController`** (`/api/orders`)
+
+| Method & Path | Behavior | Response |
+| --- | --- | --- |
+| `POST /api/orders` | Places an order using `Authentication.getName()` as `customer` (never taken from the request body) | `201 Created` (`Location: /api/orders/{id}`) with `Order` JSON |
+| `GET /api/orders` | Returns the authenticated user's order history, or `?customer=<username>` (checked by `OrderService.history`) | `200 OK` with JSON array of `Order` |
+| `GET /api/orders/{id}` | Retrieves a single order by ID (owner or `ADMIN` enforced via `@PostAuthorize`) | `200 OK` with `Order` JSON |
+| `POST /api/orders/{id}/ship` | Marks an order as `SHIPPED` (`ADMIN` only) | `204 No Content` |
+
+#### Request Validation (`PlaceOrder`)
+
+| Field | Requirements |
+| --- | --- |
+| `productId` | Required (`@NotNull`) |
+| `quantity` | Minimum `1` (`@Min(1)`) |
+
+#### Example Request & Responses
+
+**1. Customer (`alice`) places an order — `201 Created`:**
+
+```http
+POST /api/orders
+Authorization: Basic <alice>
+Content-Type: application/json
+
+{
+  "productId": 1,
+  "quantity": 2
+}
+```
+
+```json
+{
+  "customer": "alice",
+  "productId": 1,
+  "quantity": 2,
+  "id": 1,
+  "status": "NEW"
+}
+```
+
+**2. Another customer (`bob`) attempts to read Alice's order — `403 Forbidden`:**
+
+```http
+GET /api/orders/1
+Authorization: Basic <bob>
+```
+
+```json
+{
+  "detail": "Access denied",
+  "instance": "/api/orders/1",
+  "status": 403,
+  "title": "Forbidden",
+  "type": "about:blank"
+}
+```
+
+**3. Administrator (`admin`) reads Alice's order — `200 OK`:**
+
+```http
+GET /api/orders/1
+Authorization: Basic <admin>
+```
+
+```json
+{
+  "customer": "alice",
+  "productId": 1,
+  "quantity": 2,
+  "id": 1,
+  "status": "NEW"
+}
+```
+
+*(Full HTTP transcripts are recorded in [security-session.md](security-session.md).)*
+
+### 5. Filter Chain and ProblemDetail Exception Alignment
+
+- **`edu.itc.shop.config.SecurityConfig`**: Adds `.requestMatchers(HttpMethod.POST, "/api/orders/*/ship").hasRole("ADMIN")`, while all other `/api/orders/**` endpoints require authentication via `.requestMatchers("/api/**").authenticated()`.
+- **`edu.itc.shop.web.ApiExceptionHandler`**: Handles `AccessDeniedException` thrown by method-level security so `@PreAuthorize` and `@PostAuthorize` denials return the same `403 Forbidden` `application/problem+json` `ProblemDetail` payload (`title: "Forbidden"`, `detail: "Access denied"`, `instance: request URI`) as URL-level filter-chain denials.
+
+### 6. Automated Testing and Verification
+
+#### `edu.itc.shop.OrderServiceSecurityTest` (`@SpringBootTest`, 5 tests)
+
+Tests `OrderService` method-security enforcement with `@WithMockUser` against `OrderRepository`:
+
+- `alice` (`CUSTOMER`) can view her own order history.
+- `alice` (`CUSTOMER`) cannot view `bob`'s order history (`AccessDeniedException`).
+- `admin` (`ADMIN`, `CUSTOMER`) can view `bob`'s order history.
+- `alice` (`CUSTOMER`) cannot ship an order (`AccessDeniedException`).
+- Unauthenticated caller cannot access order history (`AuthenticationCredentialsNotFoundException`).
+
+#### `edu.itc.shop.OrderControllerSecurityTest` (`@WebMvcTest(OrderController.class)`, 3 tests)
+
+Imports `SecurityConfig` and `TestUsersConfiguration`, verifying HTTP filter-chain behavior with `MockMvc` and `httpBasic(...)`:
+
+- Anonymous `GET /api/orders` returns `401 Unauthorized` (`application/problem+json`) with no service invocation.
+- Customer (`alice`) `POST /api/orders/1/ship` returns `403 Forbidden` (`application/problem+json`) with no service invocation.
+- Admin (`admin`) `POST /api/orders/1/ship` returns `204 No Content` and delegates to `orderService.ship(1L)`.
+
+**Order security tests:**
+
+```bash
+./mvnw -Dtest='Order*SecurityTest' test
+```
+
+Surefire reports (`OrderControllerSecurityTest` + `OrderServiceSecurityTest`):
+
+```text
+OrderControllerSecurityTest: Tests run: 3, Failures: 0, Errors: 0, Skipped: 0
+OrderServiceSecurityTest:    Tests run: 5, Failures: 0, Errors: 0, Skipped: 0
+```
+
+**Complete test suite (`AccountIntegrationTest`, `OrderControllerSecurityTest`, `OrderServiceSecurityTest`, `ProductSecurityTest`, `ShopSecureApplicationTests`):**
+
+```bash
+./mvnw clean test
+```
+
+Combined Surefire test count across all 5 test classes:
+
+```text
+Tests run: 24, Failures: 0, Errors: 0, Skipped: 0
+```
