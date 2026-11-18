@@ -435,3 +435,33 @@ Combined Surefire test count across all 5 test classes:
 ```text
 Tests run: 24, Failures: 0, Errors: 0, Skipped: 0
 ```
+
+---
+
+## Task 4 — JWT Login and Stateless API
+
+Task 4 replaces HTTP Basic with a stateless OAuth2 Resource Server. `POST /api/auth/login` authenticates against the existing JPA-backed users and returns an HS256 access token. The token contains the `shop-api` issuer, username subject, issued/expiry times, a unique `jti`, and role authorities. Only authorities beginning with `ROLE_` are included in the roles claim.
+
+### Configuration and API
+
+- `SecurityProps` binds `shop.security.jwt-secret` and `shop.security.access-token-ttl`; the secret is validated to be at least 32 characters.
+- `JwtConfig` creates the HMAC key, Nimbus encoder/decoder, role-claim converter, and a DAO authentication manager.
+- `JWT_SECRET` is required at runtime and is not stored in the repository. PowerShell example:
+
+  ```powershell
+  $env:JWT_SECRET = (openssl rand -base64 48).Trim()
+  .\mvnw.cmd spring-boot:run
+  ```
+
+- Access-token lifetime is 15 minutes. HTTP Basic is disabled; `/api/**` accepts Bearer tokens and the filter chain remains stateless.
+- Login failures return generic `401 application/problem+json`. Missing and invalid/expired Bearer credentials also return ProblemDetail responses; no session cookie is issued.
+
+### Verification
+
+```powershell
+.\mvnw.cmd '-Dtest=AuthFlowIT,AccountIntegrationTest,ProductSecurityTest,OrderControllerSecurityTest,OrderServiceSecurityTest' test
+```
+
+`AuthFlowIT` verifies login, issuer/subject/id/roles claims, Bearer access to `/api/orders`, no `Set-Cookie`, generic bad-password handling, and an expired token returning `401`. Web MVC security tests use Spring Security's `jwt()` request processor. The Task 4 request/response notes and decoded JWT structure are in [security-session.md](security-session.md).
+
+Full verification (`.\mvnw.cmd -q verify`) passes with 30 tests, zero failures, and zero errors.

@@ -1,0 +1,7 @@
+shop:
+  security:
+    jwt-secret: ${JWT_SECRET:task4-test-secret-value-long-enough-for-hmac-sha256}
+    access-token-ttl: 15m
+  seed:
+    admin-password: TestAdminPass123
+    customer-password: TestAlicePass123

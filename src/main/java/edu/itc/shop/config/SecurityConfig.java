@@ -13,6 +13,8 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationEntryPoint;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 
@@ -28,25 +30,37 @@ import tools.jackson.databind.json.JsonMapper;
 public class SecurityConfig {
 
     @Bean
-    SecurityFilterChain api(HttpSecurity http, JsonMapper jsonMapper) throws Exception {
+    SecurityFilterChain api(
+            HttpSecurity http,
+            JsonMapper jsonMapper,
+            JwtAuthenticationConverter jwtAuthenticationConverter) throws Exception {
+        AuthenticationEntryPoint bearerEntryPoint = new BearerTokenAuthenticationEntryPoint();
         AuthenticationEntryPoint entryPoint = (req, res, ex) -> {
-            res.setHeader(HttpHeaders.WWW_AUTHENTICATE, "Basic realm=\"Realm\"");
-            writeProblem(res, req, jsonMapper, HttpStatus.UNAUTHORIZED, "Unauthorized",
-                    "Authentication required");
+            String authorization = req.getHeader(HttpHeaders.AUTHORIZATION);
+            boolean bearerRequest = authorization != null && authorization.startsWith("Bearer ");
+            if (bearerRequest) {
+                bearerEntryPoint.commence(req, res, ex);
+            } else {
+                res.setHeader(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
+            }
+            String detail = bearerRequest ? "Token expired or invalid" : "Authentication required";
+            writeProblem(res, req, jsonMapper, HttpStatus.UNAUTHORIZED, "Unauthorized", detail);
         };
 
         http.authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.POST, "/api/register").permitAll()
+                        .requestMatchers("/api/auth/**", "/api/register").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
                         .requestMatchers(HttpMethod.DELETE, "/api/products/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/orders/*/ship").hasRole("ADMIN")
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().denyAll())
-                .httpBasic(basic -> basic.authenticationEntryPoint(entryPoint))
                 .formLogin(form -> form.disable())
-                // CSRF disabled: this chain accepts no cookie-based credentials (Basic / Bearer only)
+                // CSRF disabled: this chain accepts Bearer tokens only, never cookies.
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .authenticationEntryPoint(entryPoint)
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint(entryPoint)
                         .accessDeniedHandler((req, res, ex) -> writeProblem(res, req, jsonMapper,
