@@ -19,3 +19,9 @@ shop:
   seed:
     admin-password: ${SHOP_SEED_ADMIN_PASSWORD}
     customer-password: ${SHOP_SEED_CUSTOMER_PASSWORD}
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} %-5level [rid=%X{rid}] %logger{36} - %msg%n"
+  level:
+    SECURITY: INFO

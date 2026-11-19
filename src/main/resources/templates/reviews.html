@@ -1,0 +1,44 @@
+
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product Reviews - XSS Demo</title>
+</head>
+<body>
+    <h1>Product Reviews</h1>
+    <p>Security Lab: Stored XSS Demonstration</p>
+
+    <h2>Submit a Review</h2>
+
+    <form th:action="@{/demo/reviews}" method="post">
+        <label for="content">Your Review:</label>
+        <textarea id="content" name="content"
+                  rows="4" cols="50"
+                  maxlength="2000" required></textarea>
+
+        <button type="submit">Submit Review</button>
+    </form>
+
+    <p th:if="${message}" th:text="${message}"></p>
+
+    <hr>
+
+    <h2>Submitted Reviews</h2>
+
+    <p th:if="${#lists.isEmpty(reviews)}">
+        No reviews yet.
+    </p>
+
+    <div th:each="review : ${reviews}">
+        <p>
+            <strong>Review ID:</strong>
+            <span th:text="${review.id}"></span>
+        </p>
+
+        <!-- <p th:text="${review.content}"></p> -->
+        <hr>
+    </div>
+</body>
+</html>
