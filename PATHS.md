@@ -28,7 +28,7 @@ shop-secure/
 
 ---
 
-## Task 0 · Setup
+## Task 0 · Setup - Khorn Victor
 
 ```text
 shop-secure/
@@ -54,7 +54,7 @@ shop-secure/
 
 ---
 
-## Task 1 · Default Security & First Filter Chain (`git tag task-1`)
+## Task 1 · Default Security & First Filter Chain (`git tag task-1`) - Khorn Victor
 
 ```text
 shop-secure/
@@ -85,7 +85,7 @@ Endpoints:
 
 ---
 
-## Task 2 · Users and Passwords in the Database (`git tag task-2`)
+## Task 2 · Users and Passwords in the Database (`git tag task-2`) - Be Mengseang
 
 ```text
 shop-secure/
@@ -122,7 +122,7 @@ Endpoints:
 
 ---
 
-## Task 3 · Roles and Method Security (`git tag task-3`)
+## Task 3 · Roles and Method Security (`git tag task-3`) - Kim Boramey
 
 ```text
 shop-secure/
@@ -156,7 +156,7 @@ Endpoints:
 
 ---
 
-## Task 4 · JWT Login and Stateless API (`git tag task-4`)
+## Task 4 · JWT Login and Stateless API (`git tag task-4`) - Heng Meylorng
 
 ```text
 shop-secure/
@@ -188,7 +188,7 @@ Endpoints:
 
 ---
 
-## Task 5 · Hardening: CSRF, CORS, Headers, XSS, Secrets, Logging (`git tag task-5`)
+## Task 5 · Hardening: CSRF, CORS, Headers, XSS, Secrets, Logging (`git tag task-5`) - Hour Samnang
 
 ```text
 shop-secure/
@@ -232,7 +232,7 @@ Endpoints:
 
 ---
 
-## Challenge (Optional) · Refresh Tokens, Lockout, Audit Log & OWASP (`git tag challenge`)
+## Challenge (Optional) · Refresh Tokens, Lockout, Audit Log & OWASP (`git tag challenge`) - Khorn Victor
 
 ```text
 shop-secure/
