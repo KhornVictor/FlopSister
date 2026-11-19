@@ -1,5 +1,7 @@
 package edu.itc.shop.domain;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -36,6 +38,12 @@ public class UserAccount {
     @Column(nullable = false)
     private boolean enabled;
 
+    @Column(nullable = false)
+    private int failedAttempts = 0;
+
+    @Column
+    private Instant lockedUntil;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
             name = "user_account_roles",
@@ -55,6 +63,8 @@ public class UserAccount {
         this.passwordHash = passwordHash;
         this.enabled = enabled;
         this.roles = new HashSet<>(roles);
+        this.failedAttempts = 0;
+        this.lockedUntil = null;
     }
 
     public Long getId() {
@@ -71,6 +81,30 @@ public class UserAccount {
 
     public boolean isEnabled() {
         return enabled;
+    }
+
+    public int getFailedAttempts() {
+        return failedAttempts;
+    }
+
+    public Instant getLockedUntil() {
+        return lockedUntil;
+    }
+
+    public boolean isLocked() {
+        return lockedUntil != null && lockedUntil.isAfter(Instant.now());
+    }
+
+    public void registerFailure() {
+        this.failedAttempts++;
+        if (this.failedAttempts >= 5) {
+            this.lockedUntil = Instant.now().plus(Duration.ofMinutes(15));
+        }
+    }
+
+    public void resetLockout() {
+        this.failedAttempts = 0;
+        this.lockedUntil = null;
     }
 
     public Set<Role> getRoles() {

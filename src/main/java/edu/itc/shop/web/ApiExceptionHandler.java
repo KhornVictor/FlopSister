@@ -16,10 +16,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import edu.itc.shop.service.InvalidRefreshTokenException;
 import edu.itc.shop.service.ProductNotFoundException;
+import edu.itc.shop.service.RateLimitExceededException;
 import edu.itc.shop.service.UsernameTakenException;
 import jakarta.servlet.http.HttpServletRequest;
-
+import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Translates application exceptions into RFC 9457 ProblemDetail responses.
@@ -134,7 +136,6 @@ public class ApiExceptionHandler {
         );
     }
 
-
     /**
      * Handles access-denied exceptions from method-level security.
      */
@@ -158,6 +159,32 @@ public class ApiExceptionHandler {
                 HttpStatus.UNAUTHORIZED,
                 "Unauthorized",
                 "Bad credentials",
+                request
+        );
+    }
+
+    @ExceptionHandler(InvalidRefreshTokenException.class)
+    public ProblemDetail handleInvalidRefreshToken(
+            InvalidRefreshTokenException ex,
+            HttpServletRequest request) {
+        return problem(
+                HttpStatus.UNAUTHORIZED,
+                "Unauthorized",
+                ex.getMessage(),
+                request
+        );
+    }
+
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ProblemDetail handleRateLimitExceeded(
+            RateLimitExceededException ex,
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        response.setHeader("Retry-After", String.valueOf(ex.getRetryAfterSeconds()));
+        return problem(
+                HttpStatus.TOO_MANY_REQUESTS,
+                "Too Many Requests",
+                ex.getMessage(),
                 request
         );
     }

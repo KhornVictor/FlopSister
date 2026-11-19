@@ -6,6 +6,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import edu.itc.shop.domain.AuditType;
 import edu.itc.shop.domain.Role;
 import edu.itc.shop.domain.UserAccount;
 import edu.itc.shop.repository.UserAccountRepository;
@@ -18,12 +19,15 @@ public class AccountService {
 
     private final UserAccountRepository userAccountRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuditService auditService;
 
     public AccountService(
             UserAccountRepository userAccountRepository,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+            AuditService auditService) {
         this.userAccountRepository = userAccountRepository;
         this.passwordEncoder = passwordEncoder;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -42,7 +46,9 @@ public class AccountService {
                 roles
         );
 
-        return userAccountRepository.save(account);
+        UserAccount saved = userAccountRepository.save(account);
+        auditService.record(AuditType.ROLE_CHANGED, username, "Roles assigned: " + roles);
+        return saved;
     }
 
     /**

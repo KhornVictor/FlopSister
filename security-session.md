@@ -497,3 +497,263 @@ BUILD SUCCESS
 ```
 *(All 30 unit/integration tests passing, including CORS preflight, disallowed origin rejection, security headers, XSS mitigation, method security, and JWT auth flow).*
 
+---
+
+## Challenge (+20 Extra Credit) — Defense-in-Depth & Production Hardening
+
+### 1. Refresh Tokens with Family Rotation & Theft Detection
+
+#### A. Initial Login with Refresh Token Issuance
+```http
+$ curl -i -X POST http://localhost:8080/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"alice","password":"AlicePassword123!"}'
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Cache-Control: no-cache, no-store, max-age=0, must-revalidate
+X-Request-Id: a1b2c3d4
+
+{
+  "token": "eyJhbGciOiJIUzI1NiJ9...",
+  "type": "Bearer",
+  "expiresIn": 900,
+  "refreshToken": "g8H3j_9KmN2pQ4rS6tU8vW0xY2zA4bC6dE8fG0hI2jK",
+  "refreshExpiresIn": 604800
+}
+```
+
+#### B. Single-Use Rotation (`POST /api/auth/refresh`)
+```http
+$ curl -i -X POST http://localhost:8080/api/auth/refresh \
+  -H 'Content-Type: application/json' \
+  -d '{"refreshToken":"g8H3j_9KmN2pQ4rS6tU8vW0xY2zA4bC6dE8fG0hI2jK"}'
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+X-Request-Id: b2c3d4e5
+
+{
+  "token": "eyJhbGciOiJIUzI1NiJ9...",
+  "type": "Bearer",
+  "expiresIn": 900,
+  "refreshToken": "m1N3o5P7q9R1s3T5u7V9w1X3y5Z7a9B1c3D5e7F9g1H",
+  "refreshExpiresIn": 604800
+}
+```
+
+#### C. Reuse Detection & Token Family Revocation
+Submitting the already-consumed refresh token detects token theft and immediately revokes all tokens in that family:
+```http
+$ curl -i -X POST http://localhost:8080/api/auth/refresh \
+  -H 'Content-Type: application/json' \
+  -d '{"refreshToken":"g8H3j_9KmN2pQ4rS6tU8vW0xY2zA4bC6dE8fG0hI2jK"}'
+
+HTTP/1.1 401 Unauthorized
+Content-Type: application/problem+json
+X-Request-Id: c3d4e5f6
+
+{
+  "type": "about:blank",
+  "title": "Unauthorized",
+  "status": 401,
+  "detail": "Refresh token invalid",
+  "instance": "/api/auth/refresh"
+}
+```
+Attempting to use the rotated token (`m1N3o5...`) is now also rejected because the entire token family was revoked:
+```http
+$ curl -i -X POST http://localhost:8080/api/auth/refresh \
+  -H 'Content-Type: application/json' \
+  -d '{"refreshToken":"m1N3o5P7q9R1s3T5u7V9w1X3y5Z7a9B1c3D5e7F9g1H"}'
+
+HTTP/1.1 401 Unauthorized
+Content-Type: application/problem+json
+X-Request-Id: d4e5f6a7
+
+{
+  "type": "about:blank",
+  "title": "Unauthorized",
+  "status": 401,
+  "detail": "Refresh token invalid",
+  "instance": "/api/auth/refresh"
+}
+```
+
+#### D. Explicit Logout (`POST /api/auth/logout`)
+```http
+$ curl -i -X POST http://localhost:8080/api/auth/logout \
+  -H 'Content-Type: application/json' \
+  -d '{"refreshToken":"m1N3o5P7q9R1s3T5u7V9w1X3y5Z7a9B1c3D5e7F9g1H"}'
+
+HTTP/1.1 204 No Content
+X-Request-Id: e5f6a7b8
+```
+
+---
+
+### 2. Rate Limiting (Brute-Force & Credential Stuffing Protection)
+
+Rapidly attempting 6 logins within 60 seconds from the same IP/username combination triggers HTTP 429 on the 6th attempt:
+```http
+$ curl -i -X POST http://localhost:8080/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"alice","password":"wrong-password"}'
+
+HTTP/1.1 429 Too Many Requests
+Content-Type: application/problem+json
+Retry-After: 60
+X-Request-Id: f6a7b8c9
+
+{
+  "type": "about:blank",
+  "title": "Too Many Requests",
+  "status": 429,
+  "detail": "Too many login attempts. Please retry after 60 seconds",
+  "instance": "/api/auth/login"
+}
+```
+
+---
+
+### 3. Account Lockout (Distributed Attack Protection)
+
+After 5 consecutive authentication failures across distributed IP addresses, the account locks for 15 minutes. The 6th attempt with valid credentials still returns a generic 401 `Bad credentials` to prevent account state enumeration:
+```http
+$ curl -i -X POST http://localhost:8080/api/auth/login \
+  -H 'X-Forwarded-For: 198.51.100.99' \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"alice","password":"AlicePassword123!"}'
+
+HTTP/1.1 401 Unauthorized
+Content-Type: application/problem+json
+X-Request-Id: 07a8b9c1
+
+{
+  "type": "about:blank",
+  "title": "Unauthorized",
+  "status": 401,
+  "detail": "Bad credentials",
+  "instance": "/api/auth/login"
+}
+```
+
+---
+
+### 4. Forensic Security Audit Log (`GET /api/admin/audit`)
+
+#### Customer Access Denied (`403 Forbidden`)
+```http
+$ curl -i http://localhost:8080/api/admin/audit \
+  -H 'Authorization: Bearer <customer-jwt>'
+
+HTTP/1.1 403 Forbidden
+Content-Type: application/problem+json
+X-Request-Id: 18b9c0d2
+
+{
+  "type": "about:blank",
+  "title": "Forbidden",
+  "status": 403,
+  "detail": "Access denied",
+  "instance": "/api/admin/audit"
+}
+```
+
+#### Administrator Access Granted (`200 OK`)
+```http
+$ curl -i 'http://localhost:8080/api/admin/audit?username=alice' \
+  -H 'Authorization: Bearer <admin-jwt>'
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+X-Request-Id: 29c0d1e3
+
+[
+  {
+    "id": 15,
+    "at": "2026-11-19T11:28:30.500Z",
+    "type": "REFRESH_REUSE_DETECTED",
+    "username": "alice",
+    "ip": "127.0.0.1",
+    "requestId": "c3d4e5f6",
+    "detail": "family=9f8c32b5-1e42-4f2a-8742-53b92ec1789a"
+  },
+  {
+    "id": 14,
+    "at": "2026-11-19T11:28:29.800Z",
+    "type": "TOKEN_REFRESHED",
+    "username": "alice",
+    "ip": "127.0.0.1",
+    "requestId": "b2c3d4e5",
+    "detail": "family=9f8c32b5-1e42-4f2a-8742-53b92ec1789a"
+  },
+  {
+    "id": 13,
+    "at": "2026-11-19T11:28:28.900Z",
+    "type": "LOCKED",
+    "username": "alice",
+    "ip": "198.51.100.4",
+    "requestId": "a1b2c3d4",
+    "detail": "Account locked for 15 minutes after 5 consecutive failures"
+  },
+  {
+    "id": 12,
+    "at": "2026-11-19T11:28:25.200Z",
+    "type": "LOGIN_RATE_LIMITED",
+    "username": "alice",
+    "ip": "127.0.0.1",
+    "requestId": "f6a7b8c9",
+    "detail": "retryAfter=60"
+  },
+  {
+    "id": 11,
+    "at": "2026-11-19T11:28:22.100Z",
+    "type": "LOGIN_OK",
+    "username": "alice",
+    "ip": "127.0.0.1",
+    "requestId": "e1f2a3b4",
+    "detail": null
+  }
+]
+```
+
+---
+
+### 5. Full Project Automated Verification Suite (Unit + Integration Tests)
+
+Command:
+```bash
+./mvnw test -Dtest="*Test,*IT"
+```
+Result:
+```text
+[INFO] Running edu.itc.shop.AccountIntegrationTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.shop.HardeningSecurityTest
+[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.shop.OrderControllerSecurityTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.shop.OrderServiceSecurityTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.shop.ProductSecurityTest
+[INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.shop.AuthFlowIT
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.shop.AuthLifecycleIT
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running edu.itc.shop.ShopSecureApplicationTests
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] Results:
+[INFO] 
+[INFO] Tests run: 38, Failures: 0, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+```
+
+
