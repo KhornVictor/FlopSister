@@ -1,6 +1,8 @@
 spring:
   application:
     name: shop-secure
+  config:
+    import: optional:file:.env[.properties]
   datasource:
     url: jdbc:h2:mem:shop
   jpa:
@@ -15,5 +17,5 @@ shop:
     jwt-secret: ${JWT_SECRET}
     access-token-ttl: 15m
   seed:
-    admin-password: ${SHOP_SEED_ADMIN_PASSWORD:Admin-pass-123}
-    customer-password: ${SHOP_SEED_CUSTOMER_PASSWORD:Alice-pass-123}
+    admin-password: ${SHOP_SEED_ADMIN_PASSWORD}
+    customer-password: ${SHOP_SEED_CUSTOMER_PASSWORD}
