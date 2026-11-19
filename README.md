@@ -4,12 +4,39 @@ Spring Boot 4.1.2 / Spring Security 7.1.2 / JDK 25 / Maven 3.9 project built ste
 
 ## How to Run & Verify
 
+### Required Environment Variables
+
+Copy `.env.example` to `.env` or set environment variables in your shell:
+
+| Variable | Description | Example / Minimum |
+| --- | --- | --- |
+| `JWT_SECRET` | HS256 JWT signing secret | Min 32 characters (e.g. `openssl rand -base64 48`) |
+| `SHOP_SEED_ADMIN_PASSWORD` | Password for seeded `admin` account | E.g. `Admin-pass-123` |
+| `SHOP_SEED_CUSTOMER_PASSWORD` | Password for seeded `alice` account | E.g. `Alice-pass-123` |
+
+### Running the Application
+
 ```bash
-mvn verify
-mvn spring-boot:run
+export JWT_SECRET=$(openssl rand -base64 48)
+export SHOP_SEED_ADMIN_PASSWORD="Admin-pass-123"
+export SHOP_SEED_CUSTOMER_PASSWORD="Alice-pass-123"
+./mvnw spring-boot:run
 ```
 
-*(Note: `./mvnw` can also be used once the Maven Wrapper distribution has been fetched.)*
+On Windows (PowerShell):
+```powershell
+$env:JWT_SECRET = (openssl rand -base64 48).Trim()
+$env:SHOP_SEED_ADMIN_PASSWORD = "Admin-pass-123"
+$env:SHOP_SEED_CUSTOMER_PASSWORD = "Alice-pass-123"
+.\mvnw.cmd spring-boot:run
+```
+
+### Running the Test Suite
+
+```bash
+$env:JWT_SECRET = (openssl rand -base64 48).Trim()
+./mvnw test
+```
 
 ---
 
@@ -465,3 +492,70 @@ Task 4 replaces HTTP Basic with a stateless OAuth2 Resource Server. `POST /api/a
 `AuthFlowIT` verifies login, issuer/subject/id/roles claims, Bearer access to `/api/orders`, no `Set-Cookie`, generic bad-password handling, and an expired token returning `401`. Web MVC security tests use Spring Security's `jwt()` request processor. The Task 4 request/response notes and decoded JWT structure are in [security-session.md](security-session.md).
 
 Full verification (`.\mvnw.cmd -q verify`) passes with 30 tests, zero failures, and zero errors.
+
+---
+
+## Task 5 — Hardening: CSRF, CORS, Headers, XSS, Secrets, and Logging
+
+Task 5 hardens the application perimeter, secures communications, prevents stored XSS, extracts sensitive values to environment variables, and adds request correlation and audit-grade security logging.
+
+### 1. CSRF Strategy
+
+Documented in [docs/csrf.md](docs/csrf.md).
+- The `/api/**` filter chain is stateless and accepts Bearer tokens only. Since browsers never attach Bearer tokens to cross-origin requests, CSRF is impossible and `.csrf(csrf -> csrf.disable())` is safe.
+- If a same-origin SPA with session cookies were introduced, CSRF would be configured using `CookieCsrfTokenRepository.withHttpOnlyFalse()` with an `X-XSRF-TOKEN` request header.
+
+### 2. Single-Origin CORS Configuration
+
+**`edu.itc.shop.config.CorsConfig`**:
+- Dedicated `CorsConfigurationSource` registering `/api/**`.
+- Allows origin `http://localhost:5173`.
+- Allows methods `GET`, `POST`, `PUT`, `DELETE`.
+- Allows headers `Authorization` and `Content-Type`.
+- Exposes header `Location`.
+- Max age: 3600 seconds (1 hour).
+- Unauthorized origins (such as `http://evil.example`) receive no `Access-Control-Allow-Origin` header.
+
+### 3. Security Headers
+
+Configured in `SecurityConfig`:
+- `X-Frame-Options: DENY` (clickjacking prevention).
+- `Strict-Transport-Security: max-age=31536000 ; includeSubDomains` (enforces HTTPS for 1 year).
+- `Content-Security-Policy: default-src 'self'; frame-ancestors 'none'; object-src 'none'`.
+- `Referrer-Policy: strict-origin-when-cross-origin`.
+- `X-Content-Type-Options: nosniff`.
+
+### 4. Stored XSS Mitigation
+
+- Domain model `edu.itc.shop.domain.Review` and repository `ReviewRepository`.
+- `ReviewService` and `ReviewController` handling:
+  - `POST /api/reviews` (authenticated) — creates a review with author from `Authentication.getName()`.
+  - `GET /api/products/{id}/reviews` (public) — returns reviews as JSON with `Content-Type: application/json` and `nosniff`. The malicious `<img src=x onerror="...">` payload is safely escaped as JSON text by Jackson.
+  - `GET /products/{id}/reviews.html` (public) — server-rendered Thymeleaf template using `th:text`.
+- With `th:text`, Thymeleaf HTML-escapes `<` and `>` into `&lt;` and `&gt;`, rendering the payload as literal text and preventing execution.
+
+### 5. Secrets Management
+
+- Zero literal secrets committed in repository files: verified with `git grep -n -i -E "password|secret"`.
+- `SecurityProps` validates `@NotBlank @Size(min = 32)` for `jwtSecret`.
+- If `JWT_SECRET` is unset, the application fails fast at startup with a validation error.
+- `.env.example` provides variable templates (`JWT_SECRET`, `SHOP_SEED_ADMIN_PASSWORD`, `SHOP_SEED_CUSTOMER_PASSWORD`) without secrets, and `.env` is ignored by `.gitignore`.
+
+### 6. Security Event Logging and Request Correlation
+
+- `edu.itc.shop.security.RequestIdFilter`: assigns a unique correlation ID (`rid`), attaches it to the MDC context, and returns it in the `X-Request-Id` response header.
+- `application.yml` logging pattern includes `[rid=%X{rid}]`.
+- `edu.itc.shop.security.SecurityEventLogger`: listens for:
+  - `AuthenticationSuccessEvent` → `login.ok`
+  - `AbstractAuthenticationFailureEvent` → `login.failed` (with bearer tokens redacted)
+  - `AuthorizationDeniedEvent` → `access.denied`
+- `SecurityConfig` registers `SpringAuthorizationEventPublisher` so method-level security denials publish events.
+
+### Verification
+
+Automated test suite covers all hardening features:
+```bash
+./mvnw clean test
+```
+Result: 30 tests pass with 0 failures, errors, or skipped tests. All transcripts and logs are documented in [security-session.md](security-session.md).
+

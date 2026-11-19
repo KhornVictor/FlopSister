@@ -1,10 +1,7 @@
 package edu.itc.shop.review;
 
-import java.util.List;
-
-import org.springframework.data.jpa.repository.JpaRepository;
-
-public interface ReviewRepository extends JpaRepository<Review, Long> {
-
-    List<Review> findByProductIdOrderByIdDesc(Long productId);
+/**
+ * Deprecated - moved to edu.itc.shop.repository.ReviewRepository
+ */
+public interface ReviewRepository {
 }

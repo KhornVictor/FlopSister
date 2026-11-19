@@ -1,4 +1,3 @@
-
 package edu.itc.shop.security;
 
 import java.io.IOException;
@@ -21,13 +20,11 @@ public class RequestIdFilter extends OncePerRequestFilter {
             FilterChain filterChain)
             throws ServletException, IOException {
 
-        String requestId = UUID.randomUUID().toString();
+        String requestId = UUID.randomUUID().toString().substring(0, 8);
 
         try {
             MDC.put("rid", requestId);
-
             response.setHeader("X-Request-Id", requestId);
-
             filterChain.doFilter(request, response);
         } finally {
             MDC.remove("rid");

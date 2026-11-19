@@ -374,3 +374,126 @@ AuthFlowIT: login → token claims verified → GET /api/orders with Bearer toke
 AuthFlowIT: expired token → 401 application/problem+json
 AuthFlowIT: incorrect password → 401 application/problem+json
 ```
+
+---
+
+## Task 5 — Hardening: CSRF, CORS, Headers, XSS, Secrets, and Logging
+
+### 1. CORS Preflight and Origin Validation
+
+**Request:** Allowed Origin (`http://localhost:5173`)
+```http
+$ curl -i -X OPTIONS http://localhost:8080/api/orders \
+       -H "Origin: http://localhost:5173" \
+       -H "Access-Control-Request-Method: POST" \
+       -H "Access-Control-Request-Headers: authorization,content-type"
+HTTP/1.1 200 OK
+Access-Control-Allow-Origin: http://localhost:5173
+Access-Control-Allow-Methods: GET,POST,PUT,DELETE
+Access-Control-Allow-Headers: authorization, content-type
+Access-Control-Max-Age: 3600
+Vary: Origin
+Vary: Access-Control-Request-Method
+Vary: Access-Control-Request-Headers
+```
+
+**Request:** Disallowed Origin (`http://evil.example`)
+```http
+$ curl -i -X OPTIONS http://localhost:8080/api/orders \
+       -H "Origin: http://evil.example" \
+       -H "Access-Control-Request-Method: POST" \
+       -H "Access-Control-Request-Headers: authorization,content-type"
+HTTP/1.1 403 Forbidden
+```
+*(No `Access-Control-Allow-Origin` header is returned to unauthorized origins.)*
+
+### 2. Security Headers Verification
+
+```http
+$ curl -I http://localhost:8080/api/products | grep -iE 'x-frame|strict-transport|content-security|referrer|x-content'
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Strict-Transport-Security: max-age=31536000 ; includeSubDomains
+Content-Security-Policy: default-src 'self'; frame-ancestors 'none'; object-src 'none'
+Referrer-Policy: strict-origin-when-cross-origin
+```
+
+### 3. Stored XSS Mitigation Demonstration
+
+**Payload submitted by authenticated user (`alice`):**
+```http
+POST /api/reviews
+Authorization: Bearer <alice_token>
+Content-Type: application/json
+
+{"productId":2,"stars":1,"text":"<img src=x onerror=\"document.title='pwned'\">"}
+```
+
+**Public JSON API response:**
+```http
+$ curl -s http://localhost:8080/api/products/2/reviews
+[{"id":1,"productId":2,"author":"alice","stars":1,"text":"<img src=x onerror=\"document.title='pwned'\">"}]
+```
+- JSON response uses `Content-Type: application/json` and `X-Content-Type-Options: nosniff`.
+- Content is safely encoded by Jackson JSON serialization.
+
+**Server-Rendered Thymeleaf Template (`GET /products/2/reviews.html`):**
+When rendered with `th:text`:
+```html
+<p>&lt;img src=x onerror=&quot;document.title=&#39;pwned&#39;&quot;&gt;</p>
+```
+The payload is rendered harmlessly as literal HTML text without script execution.
+
+- Safe rendering screenshot: [docs/screenshots/xss-safe.png](docs/screenshots/xss-safe.png)
+- Unsafe `th:utext` comparison screenshot (tested on temporary unmerged branch): [docs/screenshots/xss-unsafe.png](docs/screenshots/xss-unsafe.png)
+
+### 4. Secrets Management & Fail-Fast Startup
+
+Starting the application with missing or blank `JWT_SECRET` immediately fails validation at boot time via `@Validated` on `SecurityProps`:
+
+```text
+$ JWT_SECRET= ./mvnw spring-boot:run
+***************************
+APPLICATION FAILED TO START
+***************************
+
+Description:
+
+Binding to target edu.itc.shop.config.SecurityProps failed:
+
+    Property: shop.security.jwtSecret
+    Value: ""
+    Origin: class path resource [application.yml] - 17:17
+    Reason: size must be between 32 and 2147483647
+
+Action:
+
+Update your application's configuration
+```
+- Failure screenshot: [docs/screenshots/jwt-secret-missing.png](docs/screenshots/jwt-secret-missing.png)
+- Repository secret check: `git grep -n -i -E "password|secret"` confirms that all production configuration references environment variable placeholders (`${JWT_SECRET}`, `${SHOP_SEED_ADMIN_PASSWORD}`, `${SHOP_SEED_CUSTOMER_PASSWORD}`).
+
+### 5. Security Event Logging with Request Correlation (`rid`)
+
+Logged to logger `SECURITY` with MDC key `rid` matching the `X-Request-Id` response header:
+
+```text
+2026-11-19 11:02:04 WARN  [rid=fd124b3e] SECURITY - login.failed user=alice reason=BadCredentialsException
+2026-11-19 11:02:04 INFO  [rid=7a8b9c1d] SECURITY - login.ok user=alice type=UsernamePasswordAuthenticationToken
+2026-11-19 11:03:29 WARN  [rid=3e4f5a6b] SECURITY - access.denied user=alice object=ReflectiveMethodInvocation: public edu.itc.shop.domain.Order edu.itc.shop.service.OrderService.ship(long); target is of class [edu.itc.shop.service.OrderService]
+```
+*(Bearer token authentication failures redact the raw token as `<bearer-token>` to strictly avoid credential leakage.)*
+
+### 6. Automated Hardening Verification Suite
+
+Command:
+```bash
+./mvnw clean test
+```
+Result:
+```text
+Tests run: 30, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+*(All 30 unit/integration tests passing, including CORS preflight, disallowed origin rejection, security headers, XSS mitigation, method security, and JWT auth flow).*
+
