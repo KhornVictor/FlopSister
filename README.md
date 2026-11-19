@@ -2,6 +2,28 @@
 
 Spring Boot 4.1.2 / Spring Security 7.1.2 / JDK 25 / Maven 3.9 project built step-by-step across Lab-05.
 
+---
+
+## Contributors & Project Information
+
+- **Institution:** Institute of Technology of Cambodia (ITC)
+- **Department:** Information and Communication Engineering (GIC)
+- **Class / Academic Year:** I4-GIC-A · Semester 1
+- **Course:** Software Engineering — Lab 05: Security in Java Web Applications (Spring Security, JWT)
+- **Project Repository:** [`https://github.com/KhornVictor/FlopSister`](https://github.com/KhornVictor/FlopSister)
+
+### Group Members & Contributors
+
+| Name | Student ID | Task |
+| --- | --- | --- |
+| KHORN Victor | `e20230078` | Task 0, Task 1, Challenge |
+| BE Mengseang | `e20230455` | Task 2 |
+| KIM Boramey | `e20231250` | Task 3 |
+| HENG Meylorng | `e20230260` | Task 4 |
+| HOUR Samnang | `e20230372` | Task 5 |
+
+---
+
 ## How to Run & Verify
 
 ### Required Environment Variables
@@ -558,4 +580,42 @@ Automated test suite covers all hardening features:
 ./mvnw clean test
 ```
 Result: 30 tests pass with 0 failures, errors, or skipped tests. All transcripts and logs are documented in [security-session.md](security-session.md).
+
+---
+
+## Challenge — Defense-in-Depth (+20 Extra Credit)
+
+Implemented by **KHORN Victor** (`e20230078`). Detailed technical specification and architectural deep-dive are documented in [challenge.md](challenge.md).
+
+### 1. Refresh Tokens with Cryptographic Family Rotation & Reuse Detection
+- **Opaque Token**: Generated via `SecureRandom` reading 32 cryptographically secure random bytes (Base64URL-encoded, 43 characters).
+- **Hashed Storage**: Raw tokens are never stored; only their SHA-256 digests are persisted in `refresh_tokens`.
+- **Single-Use Rotation**: `POST /api/auth/refresh` exchanges an active refresh token for a new JWT access token (15-min TTL) and a new refresh token (7-day TTL).
+- **Theft & Reuse Detection**: Presenting an already-consumed refresh token signals token theft/replay. The service immediately revokes the **entire token family** (`familyId`) and logs `REFRESH_REUSE_DETECTED`. Subsequent requests with any token in that family return `401 Unauthorized`.
+- **Explicit Logout**: `POST /api/auth/logout` revokes the token family and logs `LOGOUT`.
+
+### 2. In-Memory Sliding-Window Rate Limiting
+- **Throttling**: Sliding-window rate limiter in `RateLimiterService` allows max 5 login attempts per minute per `IP:username` combination.
+- **RFC 9457 ProblemDetail Response**: The 6th attempt within the 60s window returns `429 Too Many Requests` with a dynamic `Retry-After: <seconds>` header.
+- **Audit & Reset**: Records `LOGIN_RATE_LIMITED` and automatically clears the counter upon successful authentication.
+
+### 3. Distributed Account Lockout Protection
+- **Mitigation**: Protects against distributed brute-force attacks across revolving proxy/botnet IPs.
+- **Lockout Window**: 5 consecutive failed login attempts lock the account for 15 minutes (`failedAttempts`, `lockedUntil` on `UserAccount`).
+- **Anti-Enumeration**: Authentication on a locked account returns generic `401 Bad credentials` with no disclosure of the account's locked status or expiration.
+
+### 4. Forensic Security Audit Log
+- **Transaction Isolation**: `AuditService` methods run under `@Transactional(propagation = Propagation.REQUIRES_NEW)` ensuring audit events are reliably committed even when parent business logic fails.
+- **Tracked Security Events**: `LOGIN_OK`, `LOGIN_FAILED`, `LOGIN_RATE_LIMITED`, `LOCKED`, `TOKEN_REFRESHED`, `REFRESH_REUSE_DETECTED`, `LOGOUT`, `ACCESS_DENIED`, and `ROLE_CHANGED`.
+- **Admin Query Endpoint**: `GET /api/admin/audit?username=` strictly secured to `ADMIN` role (`403 Forbidden` for customers).
+
+### 5. OWASP Top 10:2021 Security Checklist
+- Complete category-to-evidence matrix published at [docs/owasp-checklist.md](docs/owasp-checklist.md), including mitigation and automation plans for A06 (Dependency Vulnerability Scanning) and A10 (SSRF).
+
+### 6. Full Verification & Integration Test Suite
+```bash
+./mvnw test -Dtest="*Test,*IT"
+```
+Result: **38 tests passing, 0 failures, 0 errors** (including 5 comprehensive lifecycle integration tests in `AuthLifecycleIT`). All curl session transcripts are recorded in [security-session.md](security-session.md).
+
 
